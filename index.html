@@ -1,0 +1,3701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>UNKNOWN NODES</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+
+  *, *::before, *::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  :root {
+    --bg: #000000;
+    --ui-dim: rgba(255,255,255,0.08);
+    --ui-text: rgba(255,255,255,0.25);
+    --ui-accent: rgba(255,255,255,0.5);
+  }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    touch-action: none;
+  }
+
+  canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: block;
+  }
+
+  /* -- iOS Audio Unlock Splash -- */
+  #splash {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    transition: opacity 0.6s ease;
+  }
+  #splash.hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+  #splash-title {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 28px;
+    letter-spacing: 0.5em;
+    color: rgba(255,255,255,0.85);
+    text-transform: uppercase;
+  }
+  #splash-sub {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: rgba(255,255,255,0.25);
+    text-transform: uppercase;
+  }
+  #splash-btn {
+    margin-top: 16px;
+    padding: 18px 48px;
+    background: none;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: rgba(255,255,255,0.8);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: border-color 0.2s, color 0.2s, box-shadow 0.2s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #splash-btn:active {
+    border-color: rgba(0, 220, 255, 0.8);
+    color: rgba(0, 220, 255, 0.9);
+    box-shadow: 0 0 20px rgba(0, 220, 255, 0.2);
+  }
+  #splash-instructions {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: rgba(255,255,255,0.15);
+    text-transform: uppercase;
+    text-align: center;
+    line-height: 2;
+    max-width: 260px;
+  }
+
+  #ui {
+    position: fixed;
+    top: env(safe-area-inset-top, 20px);
+    left: 0; right: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+    padding: 12px 24px;
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  .ui-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: var(--ui-text);
+    text-transform: uppercase;
+    transition: color 0.3s;
+  }
+
+  .ui-label span {
+    color: var(--ui-accent);
+  }
+
+  #hint {
+    position: fixed;
+    bottom: env(safe-area-inset-bottom, 30px);
+    left: 0; right: 0;
+    text-align: center;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.3em;
+    color: rgba(255,255,255,0.12);
+    text-transform: uppercase;
+    pointer-events: none;
+    z-index: 10;
+    transition: opacity 1s;
+  }
+
+  #void-zone {
+    position: fixed;
+    bottom: env(safe-area-inset-bottom, 20px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 10;
+    transition: opacity 0.4s;
+    opacity: 0;
+  }
+  #void-zone.visible {
+    opacity: 1;
+  }
+</style>
+</head>
+<body>
+
+<!-- iOS Audio Unlock Splash -->
+<div id="splash">
+  <div id="splash-title">UNKNOWN NODES</div>
+  <div id="splash-sub">touch instrument</div>
+  <button id="splash-btn">INITIALIZE AUDIO</button>
+  <div id="splash-instructions">
+    hold &amp; release to set tempo<br>
+    each touch adds a new voice<br>
+    first touch sets bpm
+  </div>
+</div>
+
+<canvas id="c"></canvas>
+
+<div id="ui">
+  <div class="ui-label" id="bpm-display">BPM <span id="bpm-val">--</span></div>
+  <div class="ui-label">.</div>
+  <div class="ui-label">NODES <span id="node-count">0</span></div>
+</div>
+
+<div id="hint">touch to begin</div>
+
+<script>
+window.onerror = function(msg, src, line, col, err) {
+  document.title = 'ERR L' + line + ': ' + msg;
+  var d = document.createElement('div');
+  d.style.cssText = 'position:fixed;top:0;left:0;right:0;background:red;color:white;padding:10px;z-index:9999;font-size:12px;word-break:break-all';
+  d.textContent = 'L' + line + ':' + col + ' ' + msg + (err ? ' | ' + err.stack : '');
+  document.body ? document.body.appendChild(d) : setTimeout(function(){ document.body.appendChild(d); }, 100);
+  return false;
+};
+// --- AUDIO ENGINE ------------------------------------------------------------
+
+let ctx = null;
+let masterGain, masterLimiter, masterReverb;
+let bpm = null;
+let masterLoopBeats = null;
+let masterBeatSec   = null;
+let masterSixteenthSec = null;
+let masterThirtySecondSec = null;
+let nodes = [];
+let activeTouches = {};
+
+// Void zone state
+const VOID_RADIUS   = 44;
+let voidPulse       = 0;
+let voidActive      = false;
+let voidEngulfing   = false;
+
+const PERC_TYPES = ['drumbreak','808kick','808snare','hihat','openhat','rimshot','conductor','drone'];
+
+function initAudio() {
+  if (ctx) return;
+  // ctx is now created in unlockAudio; this is a no-op safety guard
+}
+
+
+let drumBus  = null; // all drum breaks route here
+let synthBus = null; // all synth/bass voices route here
+
+function buildMasterChain() {
+  // Each node has its own positional effect (reverb/delay/overdrive/tape/filter).
+  // Bus level is clean -- no additional drive here, just level control + master.
+
+  // Balanced buses -- drums and bass at equal footing
+  drumBus  = ctx.createGain(); drumBus.gain.value  = 0.75;
+  synthBus = ctx.createGain(); synthBus.gain.value = 0.60;
+
+  // Master bus
+  masterGain = ctx.createGain(); masterGain.gain.value = 0.78;
+
+  masterReverb = ctx.createConvolver();
+  masterReverb.buffer = makeReverbIR(ctx, 0.7, 0.6); // shorter, less dense reverb
+
+  // Separate reverb sends -- synth gets more reverb than drums
+  const synthReverbSend = ctx.createGain(); synthReverbSend.gain.value = 0.08;
+  const drumReverbSend  = ctx.createGain(); drumReverbSend.gain.value  = 0.03;
+  const dryGain         = ctx.createGain(); dryGain.gain.value         = 0.95;
+
+  // True peak limiter
+  masterLimiter = ctx.createDynamicsCompressor();
+  masterLimiter.threshold.value = -2;
+  masterLimiter.knee.value      = 2;
+  masterLimiter.ratio.value     = 20;
+  masterLimiter.attack.value    = 0.005;
+  masterLimiter.release.value   = 0.35;
+
+  // Routing: drums and synth have separate reverb sends
+  drumBus.connect(masterGain);
+  synthBus.connect(masterGain);
+
+  masterGain.connect(dryGain);
+  synthBus.connect(synthReverbSend); synthReverbSend.connect(masterReverb);
+  drumBus.connect(drumReverbSend);   drumReverbSend.connect(masterReverb);
+  masterReverb.connect(masterGain);  // reverb feeds back into master dry path
+  dryGain.connect(masterLimiter);
+  masterLimiter.connect(ctx.destination);
+}
+
+function makeDistortionCurve(amount) {
+  const n = 256, curve = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const x = (i * 2) / n - 1;
+    curve[i] = ((Math.PI + amount) * x) / (Math.PI + amount * Math.abs(x));
+  }
+  return curve;
+}
+
+// Bit crusher curve: quantises to N bits by stepping the output
+function makeCrusherCurve(bits) {
+  const n      = 256;
+  const curve  = new Float32Array(n);
+  const steps  = Math.pow(2, bits);
+  for (let i = 0; i < n; i++) {
+    const x    = (i * 2) / n - 1;
+    // Quantise to `steps` levels then normalise back to -1..1
+    curve[i]   = Math.round(x * steps) / steps;
+  }
+  return curve;
+}
+
+function makeReverbIR(actx, duration, decay) {
+  const sr = actx.sampleRate;
+  const len = sr * duration;
+  const buf = actx.createBuffer(2, len, sr);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < len; i++) {
+      d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay);
+    }
+  }
+  return buf;
+}
+
+// --- SYNTH VOICE DEFINITIONS -------------------------------------------------
+
+const SCALES = {
+  minor:      [0, 2, 3, 5, 7, 8, 10],
+  dorian:     [0, 2, 3, 5, 7, 9, 10],
+  phrygian:   [0, 1, 3, 5, 7, 8, 10],
+};
+
+// Bass-friendly roots: E1, A1, D2, G2
+const ROOTS = [41.2, 55.0, 73.4, 49.0];
+let rootHz = ROOTS[0];
+let scaleType = 'minor';
+
+function midiToHz(midi) {
+  return 440 * Math.pow(2, (midi - 69) / 12);
+}
+
+function getQuantizedNote(register = 'bass') {
+  const scale = SCALES[scaleType];
+  // Bass register: octaves 1-2; mid: 2-3
+  const octave = register === 'bass'
+    ? Math.floor(Math.random() * 2)
+    : 1 + Math.floor(Math.random() * 2);
+  const degree = scale[Math.floor(Math.random() * scale.length)];
+  const rootMidi = 28 + Math.round(12 * Math.log2(rootHz / 41.2));
+  return midiToHz(rootMidi + octave * 12 + degree);
+}
+
+// Weighted voice pool -- 50% drum breaks, 50% synth
+const SYNTH_POOL = ['doublesawbass','doublesawbass','acidbass','sawlead'];
+const DRUM_POOL  = ['drumbreak'];
+const POSITIONAL_EFFECT_TYPES = ['overdrive', 'tape', 'delay', 'distortion', 'bitcrusher'];
+
+// -- DRONE SYNTH --------------------------------------------------------------
+// A stretched version of the bass arp -- same detuned double-saw + sub character,
+// but held continuously with notes changing glacially and a slow filter sweep
+// instead of per-note envelopes. Sounds like the arp held down and dilated.
+function buildDroneVoice(hz, node) {
+  const dest = (node && node.fxIn) ? node.fxIn : (node && node.synthBus) ? node.synthBus : synthBus;
+  const now  = ctx.currentTime;
+
+  // Match the bass arp oscillator character exactly
+  const detune    = 4 + Math.random() * 10;
+  const filterLo  = 80  + Math.random() * 80;
+  const filterMid = 600 + Math.random() * 1200;
+  const filterQ   = 3   + Math.random() * 5;
+
+  // Same oscillator stack as buildDoubleSawBass
+  const s1  = ctx.createOscillator(); s1.type = 'sawtooth'; s1.frequency.value = hz;
+  const s2  = ctx.createOscillator(); s2.type = 'sawtooth'; s2.frequency.value = hz;
+  const sub = ctx.createOscillator(); sub.type = 'sine';     sub.frequency.value = hz / 2;
+  s1.detune.value =  detune;
+  s2.detune.value = -detune;
+
+  const sawMix  = ctx.createGain(); sawMix.gain.value  = 0.55;
+  const subGain = ctx.createGain(); subGain.gain.value = 0.45;
+
+  // Same resonant lowpass as the bass, sweeping slowly via LFO
+  const filt = ctx.createBiquadFilter(); filt.type = 'lowpass';
+  filt.frequency.value = filterLo;
+  filt.Q.value = filterQ;
+
+  // Slow filter sweep LFO -- tempo-synced, very long cycle
+  const beat   = masterBeatSec || 0.5;
+  const lfo16b = 1 / (beat * 16);
+  const lfo32b = 1 / (beat * 32);
+
+  const sweepLFO   = ctx.createOscillator(); sweepLFO.type = 'sine';
+  sweepLFO.frequency.value = lfo32b;
+  sweepLFO.frequency.setTargetAtTime(lfo16b, now + 20, 10.0);
+  const sweepDepth = ctx.createGain(); sweepDepth.gain.value = 0;
+  sweepDepth.gain.setTargetAtTime(filterMid * 0.3, now + 2,  3.0);
+  sweepDepth.gain.setTargetAtTime(filterMid * 0.7, now + 15, 8.0);
+  sweepDepth.gain.setTargetAtTime(filterMid,       now + 35, 12.0);
+  try { sweepLFO.connect(sweepDepth); sweepDepth.connect(filt.frequency); } catch(e) {}
+
+  // Filter center slowly rises -- like the arp peak but stretched
+  filt.frequency.setTargetAtTime(filterLo * 2,    now + 8,  8.0);
+  filt.frequency.setTargetAtTime(filterMid * 0.4, now + 25, 12.0);
+  filt.frequency.setTargetAtTime(filterMid * 0.7, now + 50, 15.0);
+
+  // Same wide stereo delay as the bass (7ms)
+  const wideDelay = ctx.createDelay(0.02); wideDelay.delayTime.value = 0.007;
+  const wideGain  = ctx.createGain(); wideGain.gain.value = 0.3;
+
+  // Slow amplitude swell, subtle breathing LFO
+  const ampEnv = ctx.createGain(); ampEnv.gain.value = 0;
+  ampEnv.gain.setTargetAtTime(0.45, now, 0.8);
+
+  const ampLFO     = ctx.createOscillator(); ampLFO.type = 'sine';
+  ampLFO.frequency.value = lfo32b;
+  const ampLFOGain = ctx.createGain(); ampLFOGain.gain.value = 0;
+  ampLFOGain.gain.setTargetAtTime(0.06, now + 10, 8.0);
+  ampLFO.connect(ampLFOGain);
+  try { ampLFOGain.connect(ampEnv.gain); } catch(e) {}
+
+  // Signal path mirrors bass arp exactly
+  s1.connect(sawMix); s2.connect(sawMix);
+  sawMix.connect(filt);
+  sub.connect(subGain); subGain.connect(filt);
+  filt.connect(ampEnv);
+  ampEnv.connect(dest);
+  ampEnv.connect(wideDelay); wideDelay.connect(wideGain); wideGain.connect(dest);
+
+  s1.start(now); s2.start(now); sub.start(now);
+  sweepLFO.start(now); ampLFO.start(now);
+
+  if (node) node._bassOscs = [s1, s2, sub, sweepLFO, ampLFO];
+
+  // Slowly glide to new notes from the same arp pool every 16-32 beats
+  function scheduleNextGlide() {
+    if (!node || !node.alive) return;
+    const notes = buildPositionalArp(0.3 + Math.random() * 0.4, 0.4 + Math.random() * 0.3);
+    const targetHz  = notes[Math.floor(Math.random() * notes.length)];
+    const glideTime = beat * (16 + Math.random() * 16);
+    s1.frequency.setTargetAtTime(targetHz,      ctx.currentTime, glideTime * 0.3);
+    s2.frequency.setTargetAtTime(targetHz,      ctx.currentTime, glideTime * 0.3);
+    sub.frequency.setTargetAtTime(targetHz / 2, ctx.currentTime, glideTime * 0.3);
+    node._glideTimer = setTimeout(scheduleNextGlide, glideTime * 1000);
+  }
+  if (node) node._glideTimer = setTimeout(scheduleNextGlide, beat * 8 * 1000);
+
+  return function play(time, noteDur, newHz) {};
+}
+
+function buildVoice(type, hz, node) {
+  if (type === 'drumbreak')      return buildDrumBreak(node);
+  if (type === '808kick')        return buildDrumBreak(node);
+  if (type === '808snare')       return buildDrumBreak(node);
+  if (type === '808hat')         return buildDrumBreak(node);
+  if (type === 'openhat')        return buildDrumBreak(node);
+  if (type === 'rimshot')        return buildDrumBreak(node);
+  if (type === 'doublesawbass')  return buildDoubleSawBass(hz, node);
+  if (type === 'acidbass')       return buildAcidBass(hz, node);
+  if (type === 'sawlead')        return buildSawLead(hz, node);
+  if (type === 'drone')          return buildDroneVoice(hz, node);
+  if (type === 'conductor')      return function play() {}; // no audio -- pure control
+  return buildDoubleSawBass(hz, node);
+}
+
+// -- DRUM BREAK SYSTEM --------------------------------------------------------
+// Each percussion node is a FULL DRUM BREAK: kick + snare + hats + tom firing
+// together in a randomised pattern, occupying the FIRST HALF of the loop.
+// The second half is silence -- breathing room for other breaks to interlock.
+// Each break style has a completely different effect chain.
+
+// -- LOW-LEVEL HIT GENERATORS -------------------------------------------------
+
+function fireKick(t, pitch, dec, vel, out) {
+  // 808-style: sine body with long exponential pitch drop + sub harmonic layer + punchy click
+  const sr = ctx.sampleRate;
+
+  // Main sine body -- pitches from ~160Hz down to deep sub
+  const body = ctx.createOscillator(); body.type = 'sine';
+  body.frequency.setValueAtTime(pitch, t);
+  body.frequency.setTargetAtTime(pitch * 0.08, t, 0.035); // slow exponential drop to sub
+  const bodyEnv = ctx.createGain();
+  bodyEnv.gain.setValueAtTime(0, t);
+  bodyEnv.gain.linearRampToValueAtTime(vel * 0.75, t + 0.003); // pulled back from 1.1
+  bodyEnv.gain.exponentialRampToValueAtTime(0.001, t + dec);
+
+  // Sub octave layer -- shorter decay so consecutive kicks don't stack
+  const sub = ctx.createOscillator(); sub.type = 'sine';
+  sub.frequency.setValueAtTime(pitch * 0.5, t);
+  sub.frequency.setTargetAtTime(pitch * 0.04, t, 0.04);
+  const subEnv = ctx.createGain();
+  subEnv.gain.setValueAtTime(vel * 0.35, t); // pulled back from 0.6
+  subEnv.gain.exponentialRampToValueAtTime(0.001, t + dec * 0.7); // shorter tail
+
+  // Transient click
+  const cLen = Math.floor(sr * 0.012);
+  const cBuf = ctx.createBuffer(1, cLen, sr);
+  const cd = cBuf.getChannelData(0);
+  for (let i = 0; i < cLen; i++) cd[i] = (Math.random()*2-1) * Math.pow(1 - i/cLen, 2);
+  const clk = ctx.createBufferSource(); clk.buffer = cBuf;
+  const clkEnv = ctx.createGain();
+  clkEnv.gain.setValueAtTime(vel * 0.5, t); // pulled back from 0.8
+  clkEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.012);
+
+  // Mild soft clip
+  const clip = ctx.createWaveShaper();
+  const cc = new Float32Array(256);
+  for (let i = 0; i < 256; i++) { const x = (i/128)-1; cc[i] = Math.tanh(x * 2.0) * 0.75; } // softer clip
+  clip.curve = cc;
+
+  const kickBus = ctx.createGain(); kickBus.gain.value = 0.75; // pulled back from 1.0
+  body.connect(bodyEnv); bodyEnv.connect(kickBus);
+  sub.connect(subEnv);   subEnv.connect(kickBus);
+  clk.connect(clkEnv);   clkEnv.connect(kickBus);
+  kickBus.connect(clip); clip.connect(out);
+
+  body.start(t); body.stop(t + dec + 0.15);
+  sub.start(t);  sub.stop(t + dec + 0.2);
+  clk.start(t);  clk.stop(t + 0.015);
+}
+
+function fireSnare(t, tone, dec, vel, out) {
+  const sr = ctx.sampleRate;
+
+  // Noise layer -- the "snare wire" rattle
+  const nLen = Math.floor(sr * 0.28);
+  const nBuf = ctx.createBuffer(1, nLen, sr);
+  const nd = nBuf.getChannelData(0);
+  for (let i = 0; i < nLen; i++) nd[i] = (Math.random()*2-1) * Math.pow(1 - i/nLen, 1.2);
+  const noise = ctx.createBufferSource(); noise.buffer = nBuf;
+  const nFilt = ctx.createBiquadFilter(); nFilt.type = 'bandpass';
+  nFilt.frequency.value = 2800; nFilt.Q.value = 0.7;
+  const nEnv = ctx.createGain();
+  nEnv.gain.setValueAtTime(vel * 0.85, t);
+  nEnv.gain.exponentialRampToValueAtTime(0.001, t + dec);
+
+  // Tone body -- two oscillators for the drum head resonance
+  const o1 = ctx.createOscillator(); o1.type = 'triangle'; o1.frequency.value = tone;
+  const o2 = ctx.createOscillator(); o2.type = 'sine';     o2.frequency.value = tone * 1.52;
+  // Slight pitch drop like a real snare head
+  o1.frequency.setTargetAtTime(tone * 0.8, t, 0.03);
+  const tEnv = ctx.createGain();
+  tEnv.gain.setValueAtTime(vel * 0.55, t);
+  tEnv.gain.exponentialRampToValueAtTime(0.001, t + dec * 0.4);
+
+  noise.connect(nFilt); nFilt.connect(nEnv); nEnv.connect(out);
+  o1.connect(tEnv); o2.connect(tEnv); tEnv.connect(out);
+  noise.start(t); o1.start(t); o2.start(t);
+  noise.stop(t + dec + 0.05); o1.stop(t + dec); o2.stop(t + dec);
+}
+
+function fireHat(t, open, vel, out) {
+  // TR-808 metallic hat: six square oscillators at specific intervals
+  const dur = open ? 0.22 + Math.random()*0.12 : 0.022 + Math.random()*0.012;
+  const mix = ctx.createGain(); mix.gain.value = 0.001;
+  // 808 hat frequencies -- these specific ratios create the metallic ring
+  [205.3, 369.6, 440, 784, 987.8, 1174.7].forEach(f => {
+    const o = ctx.createOscillator(); o.type = 'square'; o.frequency.value = f;
+    o.connect(mix); o.start(t); o.stop(t + dur + 0.02);
+  });
+  const hpf = ctx.createBiquadFilter(); hpf.type = 'highpass'; hpf.frequency.value = 7000;
+  // Open hat gets a bandpass resonance for that sizzle
+  const bpf = ctx.createBiquadFilter(); bpf.type = 'bandpass';
+  bpf.frequency.value = open ? 9000 : 10000; bpf.Q.value = 0.6;
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(vel * 1.2, t);
+  env.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  mix.connect(hpf); hpf.connect(bpf); bpf.connect(env); env.connect(out);
+}
+
+function fireTom(t, pitch, dec, vel, out) {
+  // Punchy tom: sine with pitch drop + noise transient
+  const body = ctx.createOscillator(); body.type = 'sine';
+  body.frequency.setValueAtTime(pitch * 1.4, t); // starts higher, drops to pitch
+  body.frequency.exponentialRampToValueAtTime(pitch * 0.7, t + dec * 0.5);
+  const bodyEnv = ctx.createGain();
+  bodyEnv.gain.setValueAtTime(vel, t);
+  bodyEnv.gain.exponentialRampToValueAtTime(0.001, t + dec);
+
+  // Head snap transient
+  const nLen = Math.floor(ctx.sampleRate * 0.025);
+  const nBuf = ctx.createBuffer(1, nLen, ctx.sampleRate);
+  const nd = nBuf.getChannelData(0);
+  for (let i = 0; i < nLen; i++) nd[i] = (Math.random()*2-1) * Math.pow(1 - i/nLen, 2);
+  const ns = ctx.createBufferSource(); ns.buffer = nBuf;
+  const nFilt = ctx.createBiquadFilter(); nFilt.type = 'bandpass';
+  nFilt.frequency.value = pitch * 3; nFilt.Q.value = 1.2;
+  const nEnv = ctx.createGain(); nEnv.gain.setValueAtTime(vel * 0.5, t);
+  nEnv.gain.exponentialRampToValueAtTime(0.001, t + 0.025);
+
+  body.connect(bodyEnv); bodyEnv.connect(out);
+  ns.connect(nFilt); nFilt.connect(nEnv); nEnv.connect(out);
+  body.start(t); body.stop(t + dec + 0.05);
+  ns.start(t); ns.stop(t + 0.03);
+}
+
+function fireRim(t, vel, out) {
+  // Tight rimshot: two detuned triangles + filtered noise snap
+  const o1 = ctx.createOscillator(); o1.type = 'triangle'; o1.frequency.value = 450;
+  const o2 = ctx.createOscillator(); o2.type = 'triangle'; o2.frequency.value = 1350;
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(vel, t);
+  env.gain.exponentialRampToValueAtTime(0.001, t + 0.05);
+  const hpf = ctx.createBiquadFilter(); hpf.type = 'highpass'; hpf.frequency.value = 1000;
+  o1.connect(env); o2.connect(env); env.connect(hpf); hpf.connect(out);
+  o1.start(t); o2.start(t); o1.stop(t+0.06); o2.stop(t+0.06);
+}
+
+// -- Clap -- layered noise bursts with slight timing offsets (human feel)
+function fireClap(t, vel, out) {
+  for (let i = 0; i < 3; i++) {
+    const offset = i * 0.008;
+    const nLen = Math.floor(ctx.sampleRate * 0.06);
+    const nBuf = ctx.createBuffer(1, nLen, ctx.sampleRate);
+    const nd = nBuf.getChannelData(0);
+    for (let j = 0; j < nLen; j++) nd[j] = (Math.random()*2-1) * Math.pow(1 - j/nLen, 2.5);
+    const src = ctx.createBufferSource(); src.buffer = nBuf;
+    const bpf = ctx.createBiquadFilter(); bpf.type = 'bandpass';
+    bpf.frequency.value = 1000 + Math.random()*400; bpf.Q.value = 0.9;
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(vel * (0.6 + i * 0.2), t + offset);
+    env.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.06);
+    src.connect(bpf); bpf.connect(env); env.connect(out);
+    src.start(t + offset); src.stop(t + offset + 0.07);
+  }
+}
+
+// -- Tight kick -- punchy, shorter decay, more click
+function fireTightKick(t, pitch, vel, out) {
+  const osc = ctx.createOscillator(); osc.type = 'sine';
+  osc.frequency.setValueAtTime(pitch, t);
+  osc.frequency.exponentialRampToValueAtTime(pitch * 0.2, t + 0.03);
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(vel, t);
+  env.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  const cLen = Math.floor(ctx.sampleRate * 0.015);
+  const cBuf = ctx.createBuffer(1, cLen, ctx.sampleRate);
+  const cd = cBuf.getChannelData(0);
+  for (let i = 0; i < cLen; i++) cd[i] = (Math.random()*2-1) * Math.pow(1-i/cLen, 1.5);
+  const clk = ctx.createBufferSource(); clk.buffer = cBuf;
+  const clkEnv = ctx.createGain(); clkEnv.gain.setValueAtTime(vel*0.9, t);
+  clkEnv.gain.exponentialRampToValueAtTime(0.001, t+0.015);
+  osc.connect(env); env.connect(out);
+  clk.connect(clkEnv); clkEnv.connect(out);
+  osc.start(t); osc.stop(t+0.15); clk.start(t); clk.stop(t+0.02);
+}
+
+// -- Snare with longer room tail
+function fireRoomSnare(t, tone, dec, vel, out) {
+  const nLen = Math.floor(ctx.sampleRate * 0.4);
+  const nBuf = ctx.createBuffer(1, nLen, ctx.sampleRate);
+  const nd = nBuf.getChannelData(0);
+  for (let i = 0; i < nLen; i++) nd[i] = (Math.random()*2-1) * Math.pow(1 - i/nLen, 0.8);
+  const noise = ctx.createBufferSource(); noise.buffer = nBuf;
+  const nf = ctx.createBiquadFilter(); nf.type = 'bandpass'; nf.frequency.value = 2200; nf.Q.value = 0.6;
+  const nEnv = ctx.createGain();
+  nEnv.gain.setValueAtTime(vel * 0.7, t);
+  nEnv.gain.exponentialRampToValueAtTime(0.001, t + dec * 1.4);
+  const body = ctx.createOscillator(); body.type = 'triangle'; body.frequency.value = tone * 0.85;
+  const bEnv = ctx.createGain();
+  bEnv.gain.setValueAtTime(vel * 0.5, t);
+  bEnv.gain.exponentialRampToValueAtTime(0.001, t + dec * 0.5);
+  noise.connect(nf); nf.connect(nEnv); nEnv.connect(out);
+  body.connect(bEnv); bEnv.connect(out);
+  noise.start(t); body.start(t);
+  noise.stop(t + dec * 1.5); body.stop(t + dec * 0.6);
+}
+
+// -- Cowbell -- classic 808 cowbell
+function fireCowbell(t, vel, out) {
+  const f1 = ctx.createOscillator(); f1.type = 'square'; f1.frequency.value = 562;
+  const f2 = ctx.createOscillator(); f2.type = 'square'; f2.frequency.value = 845;
+  const bpf = ctx.createBiquadFilter(); bpf.type = 'bandpass'; bpf.frequency.value = 700; bpf.Q.value = 2;
+  const env = ctx.createGain();
+  env.gain.setValueAtTime(vel * 0.6, t);
+  env.gain.exponentialRampToValueAtTime(0.001, t + 0.3 + Math.random() * 0.2);
+  f1.connect(bpf); f2.connect(bpf); bpf.connect(env); env.connect(out);
+  f1.start(t); f2.start(t); f1.stop(t+0.55); f2.stop(t+0.55);
+}
+
+// -- BREAK PATTERN GENERATOR --------------------------------------------------
+// Steps 0-7 on an 8-step grid spanning HALF the loop.
+// The second half is pure silence -- breathing room for other breaks.
+
+// -- CURATED DRUM BREAK PHRASES -----------------------------------------------
+// Each phrase is a hand-designed 8-step pattern (steps 0-7, 8th-note grid).
+// Inspired by classic breaks: kick+open hat stabs, snare/tom runs, syncopation.
+// Each hit: { step, inst:'kick'|'snare'|'hat'|'tom', open?:bool, vel:0-1, pitch? }
+// Steps 0-7 play over the first half of the loop. Second half = silence.
+
+const BREAK_PHRASES = [
+
+  // -- "Amen" feel -- syncopated kick, double snare, tom run at the end
+  [
+    { step:0, inst:'kick',  vel:0.92 },
+    { step:0, inst:'hat',   vel:0.35, open:true },   // kick + open hat together
+    { step:1, inst:'hat',   vel:0.18, open:false },
+    { step:2, inst:'snare', vel:0.82 },
+    { step:3, inst:'hat',   vel:0.20, open:false },
+    { step:3, inst:'kick',  vel:0.55 },               // syncopated kick before beat 2
+    { step:4, inst:'snare', vel:0.88 },
+    { step:5, inst:'hat',   vel:0.22, open:false },
+    { step:6, inst:'tom',   vel:0.72, pitch:100 },
+    { step:7, inst:'tom',   vel:0.80, pitch:72  },    // tom cascade into next bar
+  ],
+
+  // -- "Funky Drummer" feel -- sparse kick, ghost snares, crisp hats
+  [
+    { step:0, inst:'kick',  vel:0.90 },
+    { step:1, inst:'hat',   vel:0.20, open:false },
+    { step:1, inst:'snare', vel:0.18 },               // ghost snare
+    { step:2, inst:'hat',   vel:0.30, open:false },
+    { step:3, inst:'snare', vel:0.78 },               // snare on the + of 1
+    { step:4, inst:'kick',  vel:0.60 },
+    { step:4, inst:'hat',   vel:0.22, open:false },
+    { step:5, inst:'snare', vel:0.22 },               // ghost
+    { step:6, inst:'snare', vel:0.85 },               // backbeat snare
+    { step:7, inst:'hat',   vel:0.28, open:true },    // open hat on the e of 4
+  ],
+
+  // -- "Think" break feel -- kick stab + open hat, snare push, tom fill
+  [
+    { step:0, inst:'kick',  vel:0.94 },
+    { step:0, inst:'hat',   vel:0.40, open:true },    // kick + open hat stab
+    { step:2, inst:'hat',   vel:0.25, open:false },
+    { step:3, inst:'kick',  vel:0.50 },               // late kick
+    { step:3, inst:'snare', vel:0.20 },               // ghost
+    { step:4, inst:'snare', vel:0.86 },               // strong backbeat
+    { step:5, inst:'hat',   vel:0.20, open:false },
+    { step:6, inst:'kick',  vel:0.45 },
+    { step:6, inst:'tom',   vel:0.65, pitch:95  },
+    { step:7, inst:'tom',   vel:0.85, pitch:65  },    // low tom punch
+  ],
+
+  // -- Jazz/hip-hop break -- ride feel, rim click, laid-back kick
+  [
+    { step:0, inst:'kick',  vel:0.88 },
+    { step:0, inst:'hat',   vel:0.30, open:false },
+    { step:1, inst:'hat',   vel:0.15, open:false },
+    { step:2, inst:'hat',   vel:0.28, open:true  },   // open on the + of 1
+    { step:3, inst:'snare', vel:0.20 },               // ghost
+    { step:4, inst:'snare', vel:0.84 },
+    { step:4, inst:'hat',   vel:0.22, open:false },
+    { step:5, inst:'kick',  vel:0.48 },               // late syncopated kick
+    { step:6, inst:'hat',   vel:0.26, open:false },
+    { step:6, inst:'snare', vel:0.22 },               // ghost before end
+    { step:7, inst:'hat',   vel:0.20, open:true  },
+  ],
+
+  // -- Big snare roll break -- kick drop, snare flam, tom waterfall
+  [
+    { step:0, inst:'kick',  vel:0.95 },
+    { step:1, inst:'snare', vel:0.24 },               // ghost
+    { step:2, inst:'snare', vel:0.38 },               // building
+    { step:2, inst:'hat',   vel:0.22, open:false },
+    { step:3, inst:'snare', vel:0.62 },               // crescendo
+    { step:4, inst:'snare', vel:0.90 },               // peak snare
+    { step:4, inst:'kick',  vel:0.55 },               // kick+snare hit
+    { step:5, inst:'tom',   vel:0.70, pitch:110 },
+    { step:6, inst:'tom',   vel:0.78, pitch:85  },
+    { step:7, inst:'tom',   vel:0.88, pitch:60  },    // full tom cascade
+  ],
+
+  // -- Trap break -- huge sub kick, sparse snare, rolling hats
+  [
+    { step:0, inst:'kick',  vel:0.96 },
+    { step:1, inst:'hat',   vel:0.18, open:false },
+    { step:2, inst:'hat',   vel:0.28, open:false },
+    { step:3, inst:'hat',   vel:0.16, open:false },
+    { step:3, inst:'kick',  vel:0.45 },
+    { step:4, inst:'snare', vel:0.82 },
+    { step:4, inst:'hat',   vel:0.20, open:true  },
+    { step:5, inst:'hat',   vel:0.15, open:false },
+    { step:6, inst:'kick',  vel:0.58 },
+    { step:7, inst:'snare', vel:0.30 },
+  ],
+
+  // -- Bossa/Latin feel -- kick on 1+3, clave rim, brushed hats
+  [
+    { step:0, inst:'kick',  vel:0.85 },
+    { step:0, inst:'hat',   vel:0.22, open:false },
+    { step:1, inst:'rim',   vel:0.45 },
+    { step:2, inst:'hat',   vel:0.18, open:false },
+    { step:2, inst:'kick',  vel:0.52 },
+    { step:3, inst:'rim',   vel:0.55 },
+    { step:4, inst:'snare', vel:0.80 },
+    { step:4, inst:'hat',   vel:0.20, open:false },
+    { step:5, inst:'rim',   vel:0.40 },
+    { step:6, inst:'hat',   vel:0.24, open:true  },
+    { step:7, inst:'rim',   vel:0.50 },
+  ],
+
+  // -- 2-step garage -- skippy kick, snare on 3, offbeat hats
+  [
+    { step:0, inst:'kick',  vel:0.92 },
+    { step:1, inst:'hat',   vel:0.28, open:false },
+    { step:2, inst:'kick',  vel:0.50 },
+    { step:2, inst:'hat',   vel:0.16, open:false },
+    { step:3, inst:'hat',   vel:0.32, open:true  },
+    { step:3, inst:'kick',  vel:0.38 },
+    { step:4, inst:'snare', vel:0.88 },
+    { step:5, inst:'hat',   vel:0.20, open:false },
+    { step:6, inst:'kick',  vel:0.44 },
+    { step:7, inst:'hat',   vel:0.26, open:false },
+  ],
+
+  // -- Heavy metal fill -- rapid kicks, crash on 1, big snare, tom run
+  [
+    { step:0, inst:'kick',  vel:0.98 },
+    { step:0, inst:'hat',   vel:0.55, open:true  },  // crash feel
+    { step:1, inst:'kick',  vel:0.70 },
+    { step:2, inst:'kick',  vel:0.60 },
+    { step:2, inst:'snare', vel:0.30 },              // ghost
+    { step:3, inst:'kick',  vel:0.75 },
+    { step:4, inst:'snare', vel:0.92 },
+    { step:5, inst:'kick',  vel:0.65 },
+    { step:6, inst:'tom',   vel:0.78, pitch:120 },
+    { step:7, inst:'tom',   vel:0.90, pitch:55  },
+  ],
+
+  // -- Slow soul/R&B -- deep kick, lazy backbeat, swinging feel
+  [
+    { step:0, inst:'kick',  vel:0.90 },
+    { step:0, inst:'hat',   vel:0.25, open:false },
+    { step:1, inst:'hat',   vel:0.12, open:false },
+    { step:2, inst:'hat',   vel:0.22, open:false },
+    { step:3, inst:'snare', vel:0.20 },              // early ghost
+    { step:4, inst:'snare', vel:0.86 },              // fat backbeat
+    { step:4, inst:'kick',  vel:0.42 },
+    { step:5, inst:'hat',   vel:0.18, open:true  },
+    { step:6, inst:'kick',  vel:0.36 },
+    { step:7, inst:'hat',   vel:0.14, open:false },
+  ],
+
+  // -- Breakcore scatter -- chaotic hits, multiple kicks, unpredictable
+  [
+    { step:0, inst:'kick',  vel:0.95 },
+    { step:0, inst:'snare', vel:0.25 },
+    { step:1, inst:'kick',  vel:0.55 },
+    { step:1, inst:'hat',   vel:0.30, open:false },
+    { step:2, inst:'snare', vel:0.88 },
+    { step:2, inst:'kick',  vel:0.40 },
+    { step:3, inst:'hat',   vel:0.20, open:true  },
+    { step:3, inst:'tom',   vel:0.60, pitch:90  },
+    { step:4, inst:'kick',  vel:0.80 },
+    { step:5, inst:'snare', vel:0.35 },
+    { step:5, inst:'hat',   vel:0.22, open:false },
+    { step:6, inst:'tom',   vel:0.72, pitch:70  },
+    { step:7, inst:'kick',  vel:0.65 },
+    { step:7, inst:'snare', vel:0.78 },
+  ],
+
+  // -- Halftime hip-hop -- kick on 1, huge snare on 3, sparse hats
+  [
+    { step:0, inst:'kick',  vel:0.95 },
+    { step:1, inst:'hat',   vel:0.15, open:false },
+    { step:2, inst:'hat',   vel:0.22, open:false },
+    { step:3, inst:'hat',   vel:0.12, open:false },
+    { step:3, inst:'kick',  vel:0.38 },              // anticipation kick
+    { step:4, inst:'snare', vel:0.94 },              // massive halftime snare
+    { step:5, inst:'hat',   vel:0.18, open:false },
+    { step:6, inst:'hat',   vel:0.14, open:true  },
+    { step:7, inst:'kick',  vel:0.30 },
+  ],
+
+  // -- Swing groove -- triplet feel, rimshot pulse, open hat on offbeats
+  [
+    { step:0, inst:'kick',  vel:0.88 },
+    { step:0, inst:'hat',   vel:0.20, open:false },
+    { step:1, inst:'rim',   vel:0.38 },
+    { step:2, inst:'hat',   vel:0.26, open:true  },
+    { step:2, inst:'snare', vel:0.18 },              // ghost
+    { step:3, inst:'rim',   vel:0.44 },
+    { step:4, inst:'snare', vel:0.86 },
+    { step:4, inst:'hat',   vel:0.20, open:false },
+    { step:5, inst:'kick',  vel:0.50 },
+    { step:6, inst:'rim',   vel:0.36 },
+    { step:7, inst:'hat',   vel:0.24, open:true  },
+  ],
+
+  // -- Reggae/dub -- kick on 1, snare on 3, emphasis on the drop
+  [
+    { step:0, inst:'kick',  vel:0.92 },
+    { step:1, inst:'hat',   vel:0.18, open:false },
+    { step:2, inst:'hat',   vel:0.24, open:false },
+    { step:3, inst:'hat',   vel:0.16, open:false },
+    { step:3, inst:'kick',  vel:0.28 },
+    { step:4, inst:'snare', vel:0.90 },              // one drop
+    { step:5, inst:'hat',   vel:0.20, open:false },
+    { step:6, inst:'hat',   vel:0.22, open:true  },
+    { step:7, inst:'hat',   vel:0.14, open:false },
+  ],
+
+  // -- Electro -- rigid 4/4 kick, snappy snare, mechanical hats
+  [
+    { step:0, inst:'kick',  vel:0.96 },
+    { step:1, inst:'hat',   vel:0.30, open:false },
+    { step:2, inst:'kick',  vel:0.90 },
+    { step:2, inst:'snare', vel:0.25 },
+    { step:3, inst:'hat',   vel:0.28, open:false },
+    { step:4, inst:'kick',  vel:0.92 },
+    { step:4, inst:'snare', vel:0.85 },
+    { step:5, inst:'hat',   vel:0.32, open:false },
+    { step:6, inst:'kick',  vel:0.88 },
+    { step:7, inst:'hat',   vel:0.28, open:false },
+  ],
+
+  // -- Samba/afrobeat -- layered rhythms, tom accents, driving feel
+  [
+    { step:0, inst:'kick',  vel:0.88 },
+    { step:0, inst:'tom',   vel:0.55, pitch:110 },
+    { step:1, inst:'hat',   vel:0.22, open:false },
+    { step:1, inst:'rim',   vel:0.40 },
+    { step:2, inst:'snare', vel:0.72 },
+    { step:2, inst:'hat',   vel:0.18, open:false },
+    { step:3, inst:'tom',   vel:0.62, pitch:85  },
+    { step:4, inst:'kick',  vel:0.60 },
+    { step:4, inst:'hat',   vel:0.20, open:true  },
+    { step:5, inst:'rim',   vel:0.48 },
+    { step:6, inst:'snare', vel:0.80 },
+    { step:7, inst:'tom',   vel:0.70, pitch:65  },
+  ],
+
+  // -- Minimal techno -- spare kick, one snare, hi-hat pulse
+  [
+    { step:0, inst:'kick',  vel:0.94 },
+    { step:1, inst:'hat',   vel:0.24, open:false },
+    { step:2, inst:'hat',   vel:0.20, open:false },
+    { step:3, inst:'hat',   vel:0.26, open:false },
+    { step:4, inst:'snare', vel:0.88 },
+    { step:5, inst:'hat',   vel:0.22, open:false },
+    { step:6, inst:'kick',  vel:0.42 },
+    { step:6, inst:'hat',   vel:0.20, open:false },
+    { step:7, inst:'hat',   vel:0.28, open:true  },
+  ],
+
+  // -- New Orleans second line -- snare-heavy, syncopated kick, rimshot
+  [
+    { step:0, inst:'kick',  vel:0.85 },
+    { step:0, inst:'snare', vel:0.30 },              // flam on 1
+    { step:1, inst:'snare', vel:0.55 },
+    { step:2, inst:'rim',   vel:0.60 },
+    { step:2, inst:'kick',  vel:0.48 },
+    { step:3, inst:'snare', vel:0.78 },
+    { step:4, inst:'kick',  vel:0.70 },
+    { step:4, inst:'snare', vel:0.90 },
+    { step:5, inst:'rim',   vel:0.52 },
+    { step:6, inst:'snare', vel:0.40 },
+    { step:7, inst:'kick',  vel:0.55 },
+    { step:7, inst:'snare', vel:0.72 },
+  ],
+
+  // -- Abstract/free -- no obvious downbeat, floating feel
+  [
+    { step:0, inst:'hat',   vel:0.28, open:true  },
+    { step:1, inst:'kick',  vel:0.70 },
+    { step:1, inst:'snare', vel:0.22 },
+    { step:2, inst:'tom',   vel:0.65, pitch:95  },
+    { step:3, inst:'hat',   vel:0.20, open:false },
+    { step:3, inst:'snare', vel:0.80 },
+    { step:4, inst:'kick',  vel:0.45 },
+    { step:4, inst:'hat',   vel:0.24, open:false },
+    { step:5, inst:'tom',   vel:0.72, pitch:72  },
+    { step:6, inst:'snare', vel:0.35 },
+    { step:6, inst:'kick',  vel:0.60 },
+    { step:7, inst:'hat',   vel:0.30, open:true  },
+  ],
+
+  // -- Drum and bass skeleton -- fast kick pairs, snare on 3, driving hats
+  [
+    { step:0, inst:'kick',  vel:0.95 },
+    { step:0, inst:'hat',   vel:0.22, open:false },
+    { step:1, inst:'kick',  vel:0.62 },              // quick double
+    { step:1, inst:'hat',   vel:0.18, open:false },
+    { step:2, inst:'hat',   vel:0.26, open:false },
+    { step:3, inst:'hat',   vel:0.20, open:true  },
+    { step:4, inst:'snare', vel:0.90 },
+    { step:4, inst:'hat',   vel:0.24, open:false },
+    { step:5, inst:'kick',  vel:0.55 },
+    { step:5, inst:'hat',   vel:0.16, open:false },
+    { step:6, inst:'hat',   vel:0.22, open:false },
+    { step:7, inst:'kick',  vel:0.48 },
+    { step:7, inst:'hat',   vel:0.28, open:false },
+  ],
+
+  // -- SAMBA clave --
+  [ { step:0, inst:'kick',  vel:0.90 },
+    { step:0, inst:'rim',   vel:0.50 },
+    { step:1, inst:'hat',   vel:0.25, open:false },
+    { step:2, inst:'kick',  vel:0.55 },
+    { step:3, inst:'rim',   vel:0.70 },
+    { step:3, inst:'hat',   vel:0.20, open:false },
+    { step:4, inst:'snare', vel:0.85 },
+    { step:5, inst:'rim',   vel:0.45 },
+    { step:6, inst:'kick',  vel:0.60 },
+    { step:6, inst:'hat',   vel:0.22, open:true  },
+    { step:7, inst:'rim',   vel:0.65 },
+  ],
+
+  // -- REGGAE one-drop --
+  [ { step:2, inst:'snare', vel:0.92 },   // snare only on 3
+    { step:2, inst:'kick',  vel:0.85 },
+    { step:0, inst:'hat',   vel:0.20, open:false },
+    { step:1, inst:'hat',   vel:0.18, open:false },
+    { step:3, inst:'hat',   vel:0.22, open:false },
+    { step:4, inst:'hat',   vel:0.20, open:false },
+    { step:5, inst:'hat',   vel:0.18, open:false },
+    { step:6, inst:'hat',   vel:0.24, open:true  },
+    { step:7, inst:'hat',   vel:0.18, open:false },
+  ],
+
+  // -- AFROBEAT kpanlogo feel --
+  [ { step:0, inst:'kick',  vel:0.95 },
+    { step:1, inst:'rim',   vel:0.55 },
+    { step:2, inst:'kick',  vel:0.45 },
+    { step:3, inst:'snare', vel:0.80 },
+    { step:3, inst:'rim',   vel:0.40 },
+    { step:4, inst:'kick',  vel:0.70 },
+    { step:5, inst:'rim',   vel:0.60 },
+    { step:5, inst:'hat',   vel:0.30, open:false },
+    { step:6, inst:'snare', vel:0.55 },
+    { step:7, inst:'kick',  vel:0.50 },
+    { step:7, inst:'rim',   vel:0.45 },
+  ],
+
+  // -- TRAP stutter hats --
+  [ { step:0, inst:'kick',  vel:0.95 },
+    { step:0, inst:'hat',   vel:0.35, open:false },
+    { step:1, inst:'hat',   vel:0.55, open:false },
+    { step:1, inst:'hat',   vel:0.30, open:false },
+    { step:2, inst:'hat',   vel:0.70, open:false },
+    { step:3, inst:'snare', vel:0.90 },
+    { step:3, inst:'hat',   vel:0.40, open:false },
+    { step:4, inst:'kick',  vel:0.65 },
+    { step:5, inst:'hat',   vel:0.60, open:false },
+    { step:6, inst:'kick',  vel:0.50 },
+    { step:6, inst:'hat',   vel:0.45, open:false },
+    { step:7, inst:'hat',   vel:0.80, open:false },
+  ],
+
+  // -- HALF-TIME big room --
+  [ { step:0, inst:'kick',  vel:0.98 },
+    { step:0, inst:'hat',   vel:0.30, open:true  },
+    { step:1, inst:'hat',   vel:0.15, open:false },
+    { step:2, inst:'hat',   vel:0.20, open:false },
+    { step:3, inst:'hat',   vel:0.18, open:false },
+    { step:4, inst:'snare', vel:0.96 },              // fat halftime snare on beat 3
+    { step:4, inst:'hat',   vel:0.25, open:false },
+    { step:5, inst:'hat',   vel:0.15, open:false },
+    { step:6, inst:'kick',  vel:0.40 },              // ghost kick
+    { step:7, inst:'hat',   vel:0.20, open:false },
+  ],
+
+  // -- 3 AGAINST 2 polyrhythm --
+  [ { step:0, inst:'kick',  vel:0.90 },
+    { step:0, inst:'tom',   vel:0.65, pitch:100 },
+    { step:1, inst:'hat',   vel:0.25, open:false },
+    { step:2, inst:'snare', vel:0.70 },
+    { step:2, inst:'hat',   vel:0.20, open:false },
+    { step:3, inst:'tom',   vel:0.75, pitch:80  },
+    { step:4, inst:'kick',  vel:0.85 },
+    { step:4, inst:'hat',   vel:0.22, open:false },
+    { step:5, inst:'hat',   vel:0.18, open:false },
+    { step:6, inst:'tom',   vel:0.70, pitch:60  },
+    { step:6, inst:'snare', vel:0.60 },
+    { step:7, inst:'hat',   vel:0.28, open:true  },
+  ],
+
+  // -- BREAKBEAT choppy --
+  [ { step:0, inst:'kick',  vel:0.92 },
+    { step:1, inst:'snare', vel:0.40 },              // early snare
+    { step:2, inst:'kick',  vel:0.70 },
+    { step:2, inst:'hat',   vel:0.35, open:false },
+    { step:3, inst:'kick',  vel:0.55 },
+    { step:4, inst:'snare', vel:0.88 },
+    { step:4, inst:'hat',   vel:0.28, open:true  },
+    { step:5, inst:'kick',  vel:0.45 },
+    { step:6, inst:'snare', vel:0.35 },              // late ghost
+    { step:6, inst:'hat',   vel:0.20, open:false },
+    { step:7, inst:'kick',  vel:0.80 },
+  ],
+
+  // -- BOSSA NOVA --
+  [ { step:0, inst:'kick',  vel:0.85 },
+    { step:0, inst:'rim',   vel:0.55 },
+    { step:1, inst:'hat',   vel:0.20, open:false },
+    { step:2, inst:'rim',   vel:0.65 },
+    { step:2, inst:'hat',   vel:0.18, open:false },
+    { step:3, inst:'kick',  vel:0.45 },
+    { step:3, inst:'hat',   vel:0.22, open:false },
+    { step:4, inst:'rim',   vel:0.75 },
+    { step:5, inst:'hat',   vel:0.20, open:false },
+    { step:5, inst:'kick',  vel:0.35 },
+    { step:6, inst:'rim',   vel:0.60 },
+    { step:6, inst:'hat',   vel:0.25, open:true  },
+    { step:7, inst:'rim',   vel:0.50 },
+  ],
+
+  // -- MINIMAL TECHNO --
+  [ { step:0, inst:'kick',  vel:0.96 },
+    { step:2, inst:'kick',  vel:0.94 },
+    { step:4, inst:'kick',  vel:0.95 },
+    { step:6, inst:'kick',  vel:0.92 },              // four-on-the-floor
+    { step:1, inst:'hat',   vel:0.40, open:false },
+    { step:3, inst:'hat',   vel:0.38, open:false },
+    { step:5, inst:'hat',   vel:0.42, open:false },
+    { step:7, inst:'hat',   vel:0.36, open:false },
+    { step:2, inst:'snare', vel:0.22 },              // ghost snare for texture
+    { step:6, inst:'snare', vel:0.20 },
+  ],
+
+  // -- HIP HOP LAID BACK --
+  [ { step:0, inst:'kick',  vel:0.90 },
+    { step:1, inst:'hat',   vel:0.22, open:false },
+    { step:2, inst:'hat',   vel:0.18, open:false },
+    { step:3, inst:'snare', vel:0.85 },
+    { step:3, inst:'hat',   vel:0.20, open:false },
+    { step:4, inst:'kick',  vel:0.55 },              // late kick
+    { step:5, inst:'hat',   vel:0.25, open:false },
+    { step:6, inst:'hat',   vel:0.20, open:true  },
+    { step:6, inst:'kick',  vel:0.40 },
+    { step:7, inst:'snare', vel:0.25 },              // ghost
+    { step:7, inst:'hat',   vel:0.18, open:false },
+  ],
+
+  // -- DRUM N BASS AMEN FEEL --
+  [ { step:0, inst:'kick',  vel:0.95 },
+    { step:0, inst:'hat',   vel:0.50, open:false },
+    { step:1, inst:'snare', vel:0.35 },              // ghost
+    { step:1, inst:'hat',   vel:0.60, open:false },
+    { step:2, inst:'hat',   vel:0.45, open:false },
+    { step:2, inst:'snare', vel:0.88 },
+    { step:3, inst:'hat',   vel:0.55, open:false },
+    { step:3, inst:'kick',  vel:0.50 },
+    { step:4, inst:'kick',  vel:0.80 },
+    { step:4, inst:'hat',   vel:0.50, open:false },
+    { step:5, inst:'snare', vel:0.30 },
+    { step:5, inst:'hat',   vel:0.65, open:false },
+    { step:6, inst:'hat',   vel:0.45, open:true  },
+    { step:7, inst:'snare', vel:0.92 },
+    { step:7, inst:'hat',   vel:0.55, open:false },
+  ],
+
+  // -- SECOND LINE New Orleans --
+  [ { step:0, inst:'kick',  vel:0.88 },
+    { step:0, inst:'snare', vel:0.30 },              // flam
+    { step:1, inst:'snare', vel:0.60 },
+    { step:1, inst:'rim',   vel:0.45 },
+    { step:2, inst:'kick',  vel:0.55 },
+    { step:2, inst:'hat',   vel:0.35, open:true  },
+    { step:3, inst:'snare', vel:0.80 },
+    { step:3, inst:'rim',   vel:0.50 },
+    { step:4, inst:'kick',  vel:0.70 },
+    { step:5, inst:'snare', vel:0.45 },
+    { step:5, inst:'rim',   vel:0.60 },
+    { step:6, inst:'snare', vel:0.90 },
+    { step:6, inst:'kick',  vel:0.42 },
+    { step:7, inst:'rim',   vel:0.55 },
+  ],
+
+  // -- GARAGE UK shuffled --
+  [ { step:0, inst:'kick',  vel:0.90 },
+    { step:0, inst:'hat',   vel:0.30, open:false },
+    { step:1, inst:'hat',   vel:0.55, open:false },  // shuffled offbeat
+    { step:2, inst:'snare', vel:0.40 },              // ghost
+    { step:2, inst:'hat',   vel:0.28, open:false },
+    { step:3, inst:'hat',   vel:0.60, open:false },
+    { step:3, inst:'kick',  vel:0.45 },
+    { step:4, inst:'snare', vel:0.85 },
+    { step:4, inst:'hat',   vel:0.25, open:false },
+    { step:5, inst:'hat',   vel:0.58, open:false },
+    { step:6, inst:'kick',  vel:0.55 },
+    { step:6, inst:'hat',   vel:0.30, open:true  },
+    { step:7, inst:'hat',   vel:0.62, open:false },
+  ],
+
+  // -- MARCH snare heavy --
+  [ { step:0, inst:'snare', vel:0.95 },
+    { step:0, inst:'kick',  vel:0.80 },
+    { step:1, inst:'snare', vel:0.35 },              // drag
+    { step:1, inst:'snare', vel:0.50 },
+    { step:2, inst:'snare', vel:0.88 },
+    { step:3, inst:'snare', vel:0.28 },
+    { step:3, inst:'rim',   vel:0.55 },
+    { step:4, inst:'snare', vel:0.92 },
+    { step:4, inst:'kick',  vel:0.75 },
+    { step:5, inst:'snare', vel:0.40 },
+    { step:6, inst:'snare', vel:0.85 },
+    { step:6, inst:'rim',   vel:0.45 },
+    { step:7, inst:'snare', vel:0.55 },
+  ],
+
+  // -- GNAWA / trance hypnotic --
+  [ { step:0, inst:'kick',  vel:0.92 },
+    { step:0, inst:'tom',   vel:0.60, pitch:90  },
+    { step:1, inst:'tom',   vel:0.45, pitch:90  },
+    { step:2, inst:'tom',   vel:0.70, pitch:75  },
+    { step:2, inst:'kick',  vel:0.40 },
+    { step:3, inst:'tom',   vel:0.55, pitch:90  },
+    { step:4, inst:'kick',  vel:0.88 },
+    { step:4, inst:'tom',   vel:0.65, pitch:90  },
+    { step:5, inst:'tom',   vel:0.40, pitch:75  },
+    { step:6, inst:'tom',   vel:0.75, pitch:60  },
+    { step:6, inst:'kick',  vel:0.50 },
+    { step:7, inst:'tom',   vel:0.60, pitch:90  },
+    { step:7, inst:'hat',   vel:0.35, open:true  },
+  ],
+];
+
+function generateBreakPattern(density) {
+  density = density || 1.0;
+  const phrase = BREAK_PHRASES[Math.floor(Math.random() * BREAK_PHRASES.length)];
+  const humanised = phrase.map(hit => ({
+    ...hit,
+    vel: Math.min(1, hit.vel * (0.88 + Math.random() * 0.18))
+  }));
+  if (density >= 1.0) return humanised;
+
+  // Sort hits by velocity descending -- keep the most important hits first
+  const sorted = [...humanised].sort((a, b) => b.vel - a.vel);
+  // Keep at least 1 hit, scale up to full pattern
+  const keepCount = Math.max(1, Math.round(sorted.length * density));
+  const kept = new Set(sorted.slice(0, keepCount).map((_, i) => i));
+  // Rebuild preserving original order, only including kept hits
+  const keptHits = sorted.slice(0, keepCount);
+  return humanised.filter(hit => keptHits.some(k => k.step === hit.step && k.inst === hit.inst));
+}
+
+// -- BREAK STYLE 1: BOOM BAP ---------------------------------------------------
+// Deep sub kicks, cracking snare, vinyl warmth.
+// Effect: gentle lowpass (worn record feel) + subtle vinyl crackle.
+function buildDrumBreak_BoomBap(terminal, loopBeats, density) {
+  const pat       = generateBreakPattern(density);
+  const kickPitch = 140 + Math.random() * 40;  // start high, drops to deep sub
+  const kickDec   = 0.7 + Math.random() * 0.4; // long 808 tail
+  const snareTone = 180 + Math.random() * 45;
+  const snareDec  = 0.18 + Math.random() * 0.06;
+
+  // Vinyl warmth: gentle shelf + crackle
+  const shelf = ctx.createBiquadFilter();
+  shelf.type = 'lowshelf'; shelf.frequency.value = 200; shelf.gain.value = 4;
+  const lpf = ctx.createBiquadFilter();
+  lpf.type = 'lowpass'; lpf.frequency.value = 10000 + Math.random() * 3000;
+  const outGain = ctx.createGain(); outGain.gain.value = 1.1;
+  outGain.connect(shelf); shelf.connect(lpf); lpf.connect(terminal);
+
+  return function play(time, loopSec, density, drumNode) {
+    // Fresh gain for this fire -- will be faded out on next retrigger
+    const fireOut = ctx.createGain(); fireOut.gain.value = 1;
+    fireOut.connect(outGain);
+    if (drumNode) drumNode._drumOutGain = fireOut;
+    const stepSec  = masterBeatSec / 2;
+    const breakSec = stepSec * 8;
+
+    // Vinyl crackle across break window
+    const crLen = Math.floor(ctx.sampleRate * breakSec);
+    const crBuf = ctx.createBuffer(1, crLen, ctx.sampleRate);
+    const crD   = crBuf.getChannelData(0);
+    for (let i = 0; i < crLen; i++) {
+      crD[i] = Math.random() > 0.9985 ? (Math.random() * 2 - 1) * 0.5 : 0;
+    }
+    const crSrc = ctx.createBufferSource(); crSrc.buffer = crBuf;
+    const crG   = ctx.createGain(); crG.gain.value = 0.055;
+    crSrc.connect(crG); crG.connect(drumBus);
+    crSrc.start(time); crSrc.stop(time + breakSec + 0.01);
+
+    pat.filter(hit => hit.step * stepSec < breakSec).forEach(hit => {
+      const t = time + hit.step * stepSec;
+      if (hit.inst === 'kick')  fireKick(t,  kickPitch, kickDec,  hit.vel, fireOut);
+      if (hit.inst === 'snare') fireSnare(t, snareTone, snareDec * (hit.vel > 0.5 ? 1 : 0.5), hit.vel, fireOut);
+      if (hit.inst === 'hat')   fireHat(t,   hit.open,  hit.vel, fireOut);
+      if (hit.inst === 'tom')   fireTom(t,   hit.pitch, 0.22,     hit.vel, fireOut);
+      if (hit.inst === 'rim')   fireRim(t,   hit.vel, fireOut);
+      if (hit.inst === 'clap')  fireClap(t,  hit.vel, fireOut);
+    });
+  };
+}
+
+// -- BREAK STYLE 2: JUNGLE / AMEN ---------------------------------------------
+// Punchy, forward. Mid-presence EQ + short room air.
+function buildDrumBreak_Jungle(terminal, loopBeats, density) {
+  const pat       = generateBreakPattern(density);
+  const kickPitch = 160 + Math.random() * 40;
+  const snareTone = 230 + Math.random() * 50;
+
+  // Mid-presence boost + bright room reverb
+  const mid = ctx.createBiquadFilter();
+  mid.type = 'peaking'; mid.frequency.value = 1800; mid.gain.value = 6; mid.Q.value = 1.0;
+  const hi = ctx.createBiquadFilter();
+  hi.type = 'highshelf'; hi.frequency.value = 6000; hi.gain.value = 3;
+
+  const rv    = ctx.createConvolver();
+  const rvLen = Math.floor(ctx.sampleRate * 0.14);
+  const rvBuf = ctx.createBuffer(2, rvLen, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = rvBuf.getChannelData(ch);
+    for (let i = 0; i < rvLen; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / rvLen, 4);
+  }
+  rv.buffer = rvBuf;
+  const rvG   = ctx.createGain(); rvG.gain.value = 0.28;
+  const outGain = ctx.createGain(); outGain.gain.value = 1.0;
+  outGain.connect(mid); mid.connect(hi); hi.connect(terminal);
+  outGain.connect(rv);  rv.connect(rvG); rvG.connect(terminal);
+
+  return function play(time, loopSec, density, drumNode) {
+    // Fresh gain for this fire -- will be faded out on next retrigger
+    const fireOut = ctx.createGain(); fireOut.gain.value = 1;
+    fireOut.connect(outGain);
+    if (drumNode) drumNode._drumOutGain = fireOut;
+    // Density from loop length: short=8b (jungle), medium=16b, long=32b
+    // density 1.0 = double-time 16th grid (jungle bustle)
+    // density 0.5 = normal 8th grid
+    // density 0.25 = half-time feel
+    // Step grid scales with loop length (press duration):
+    // 8b  = dense/jungle: 16th note grid, tight swing
+    // 16b = normal: 8th note grid, light swing
+    // 32b = sparse/halftime: quarter note grid, no swing
+    const stepSec = loopBeats <= 8  ? masterBeatSec / 4   // 16th notes -- jungle bustle
+                  : loopBeats <= 16 ? masterBeatSec / 2   // 8th notes  -- standard
+                  :                   masterBeatSec;       // quarter notes -- halftime
+    const swing   = loopBeats <= 8  ? stepSec * 0.14      // pronounced swing when dense
+                  : loopBeats <= 16 ? stepSec * 0.06      // light swing
+                  :                   0;                   // straight when sparse
+    const halfSec = loopSec;
+    pat.filter(hit => hit.step * stepSec < halfSec).forEach(hit => {
+      const t = time + hit.step * stepSec;
+      if (hit.inst === 'kick')  fireKick(t,  kickPitch, 0.22,                         hit.vel, fireOut);
+      if (hit.inst === 'snare') fireSnare(t, snareTone, hit.vel > 0.5 ? 0.11 : 0.055, hit.vel, fireOut);
+      if (hit.inst === 'hat')   fireHat(t,   hit.open,  hit.vel, fireOut);
+      if (hit.inst === 'tom')   fireTom(t,   hit.pitch * 1.1, 0.13,                   hit.vel, fireOut);
+      if (hit.inst === 'rim')   fireRim(t,   hit.vel, fireOut);
+    });
+  };
+}
+
+// -- BREAK STYLE 3: TRAP / 808 ------------------------------------------------
+// Sparse and heavy. Dark lowpass, long sub kick tail.
+function buildDrumBreak_Trap(terminal, loopBeats, density) {
+  const pat = generateBreakPattern(density);
+  // Trap: backbeat only, sparse hats
+  const filtered = pat.filter(h => h.inst !== 'snare' || h.vel > 0.7);
+  filtered.push(...pat.filter(h => h.inst === 'snare' && h.vel > 0.7).slice(0,1));
+
+  const kickPitch = 150 + Math.random() * 30; // very long sub decay
+  const snareTone = 165 + Math.random() * 35;
+
+  // Dark lowpass + sub boost shelf
+  const dark = ctx.createBiquadFilter();
+  dark.type = 'lowpass'; dark.frequency.value = 7000 + Math.random() * 2000;
+  const subBoost = ctx.createBiquadFilter();
+  subBoost.type = 'lowshelf'; subBoost.frequency.value = 100; subBoost.gain.value = 5;
+  const outGain = ctx.createGain(); outGain.gain.value = 1.1;
+  outGain.connect(subBoost); subBoost.connect(dark); dark.connect(terminal);
+
+  return function play(time, loopSec, density, drumNode) {
+    // Fresh gain for this fire -- will be faded out on next retrigger
+    const fireOut = ctx.createGain(); fireOut.gain.value = 1;
+    fireOut.connect(outGain);
+    if (drumNode) drumNode._drumOutGain = fireOut;
+    // Density from loop length: short=8b (jungle), medium=16b, long=32b
+    // density 1.0 = double-time 16th grid (jungle bustle)
+    // density 0.5 = normal 8th grid
+    // density 0.25 = half-time feel
+    // Step grid scales with loop length (press duration):
+    // 8b  = dense/jungle: 16th note grid, tight swing
+    // 16b = normal: 8th note grid, light swing
+    // 32b = sparse/halftime: quarter note grid, no swing
+    const stepSec = loopBeats <= 8  ? masterBeatSec / 4   // 16th notes -- jungle bustle
+                  : loopBeats <= 16 ? masterBeatSec / 2   // 8th notes  -- standard
+                  :                   masterBeatSec;       // quarter notes -- halftime
+    const swing   = loopBeats <= 8  ? stepSec * 0.14      // pronounced swing when dense
+                  : loopBeats <= 16 ? stepSec * 0.06      // light swing
+                  :                   0;                   // straight when sparse
+    const halfSec = loopSec;
+    pat.filter(hit => hit.step * stepSec < halfSec).forEach(hit => {
+      const t = time + hit.step * stepSec;
+      if (hit.inst === 'kick')  fireKick(t,  kickPitch, hit.vel > 0.7 ? 0.75 : 0.35, hit.vel, fireOut);
+      if (hit.inst === 'snare') fireSnare(t, snareTone, hit.vel > 0.5 ? 0.20 : 0.09,  hit.vel, fireOut);
+      if (hit.inst === 'hat')   fireHat(t,   hit.open,  hit.vel, fireOut);
+      if (hit.inst === 'tom')   fireTom(t,   hit.pitch * 0.8, 0.28,                   hit.vel, fireOut);
+    });
+  };
+}
+
+// -- BREAK STYLE 4: FUNK / LIVE ------------------------------------------------
+// Swung 16ths, tight feel. Warm tape-style soft saturation + gentle bus compression.
+function buildDrumBreak_Funk(terminal, loopBeats, density) {
+  const pat       = generateBreakPattern(density);
+  const kickPitch = 155 + Math.random() * 25;
+  const snareTone = 205 + Math.random() * 60;
+
+  const presence = ctx.createBiquadFilter();
+  presence.type = 'peaking'; presence.frequency.value = 700; presence.gain.value = 3; presence.Q.value = 0.8;
+  const sat = ctx.createWaveShaper();
+  const sc  = new Float32Array(256);
+  for (let i = 0; i < 256; i++) { const x = (i/128)-1; sc[i] = Math.tanh(x*1.6)*0.78; }
+  sat.curve = sc;
+  const comp = ctx.createDynamicsCompressor();
+  comp.threshold.value = -10; comp.ratio.value = 4;
+  comp.attack.value = 0.004; comp.release.value = 0.1;
+  const outGain = ctx.createGain(); outGain.gain.value = 1.05;
+  outGain.connect(presence); presence.connect(sat); sat.connect(comp); comp.connect(terminal);
+
+  return function play(time, loopSec, density, drumNode) {
+    // Fresh gain for this fire -- will be faded out on next retrigger
+    const fireOut = ctx.createGain(); fireOut.gain.value = 1;
+    fireOut.connect(outGain);
+    if (drumNode) drumNode._drumOutGain = fireOut;
+    // Density from loop length: short=8b (jungle), medium=16b, long=32b
+    // density 1.0 = double-time 16th grid (jungle bustle)
+    // density 0.5 = normal 8th grid
+    // density 0.25 = half-time feel
+    // Step grid scales with loop length (press duration):
+    // 8b  = dense/jungle: 16th note grid, tight swing
+    // 16b = normal: 8th note grid, light swing
+    // 32b = sparse/halftime: quarter note grid, no swing
+    const stepSec = loopBeats <= 8  ? masterBeatSec / 4   // 16th notes -- jungle bustle
+                  : loopBeats <= 16 ? masterBeatSec / 2   // 8th notes  -- standard
+                  :                   masterBeatSec;       // quarter notes -- halftime
+    const swing   = loopBeats <= 8  ? stepSec * 0.14      // pronounced swing when dense
+                  : loopBeats <= 16 ? stepSec * 0.06      // light swing
+                  :                   0;                   // straight when sparse
+    const halfSec = loopSec;
+    const sw = s => time + s * stepSec + (s % 2 === 1 ? swing : 0);
+
+    pat.filter(hit => hit.step * stepSec < halfSec).forEach(hit => {
+      const t = sw(hit.step);
+      if (hit.inst === 'kick')  fireKick(t,  kickPitch, 0.65,                         hit.vel, fireOut);
+      if (hit.inst === 'snare') fireSnare(t, snareTone, hit.vel > 0.5 ? 0.14 : 0.06,  hit.vel, fireOut);
+      if (hit.inst === 'hat')   fireHat(t,   hit.open,  hit.vel, fireOut);
+      if (hit.inst === 'tom')   fireTom(t,   hit.pitch, 0.20,                          hit.vel, fireOut);
+    });
+  };
+}
+
+// -- BREAK STYLE 5: SOUL / R&B ------------------------------------------------
+// Warm, deep, slightly swung. Room snare, sub kick. Effect: plate reverb warmth.
+function buildDrumBreak_Soul(terminal, loopBeats, density) {
+  const pat       = generateBreakPattern(density);
+  const kickPitch = 130 + Math.random() * 30;
+  const snareTone = 190 + Math.random() * 40;
+
+  // Plate reverb sim: long convolver
+  const rv = ctx.createConvolver();
+  const rvLen = Math.floor(ctx.sampleRate * 0.6);
+  const rvBuf = ctx.createBuffer(2, rvLen, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = rvBuf.getChannelData(ch);
+    for (let i = 0; i < rvLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/rvLen, 1.8);
+  }
+  rv.buffer = rvBuf;
+  const rvG = ctx.createGain(); rvG.gain.value = 0.3;
+  const warmth = ctx.createBiquadFilter(); warmth.type = 'lowshelf'; warmth.frequency.value = 300; warmth.gain.value = 3;
+  const outGain = ctx.createGain(); outGain.gain.value = 1.0;
+  outGain.connect(warmth); warmth.connect(terminal);
+  outGain.connect(rv); rv.connect(rvG); rvG.connect(terminal);
+
+  return function play(time, loopSec, density, drumNode) {
+    // Fresh gain for this fire -- will be faded out on next retrigger
+    const fireOut = ctx.createGain(); fireOut.gain.value = 1;
+    fireOut.connect(outGain);
+    if (drumNode) drumNode._drumOutGain = fireOut;
+    // Density from loop length: short=8b (jungle), medium=16b, long=32b
+    // density 1.0 = double-time 16th grid (jungle bustle)
+    // density 0.5 = normal 8th grid
+    // density 0.25 = half-time feel
+    // Step grid scales with loop length (press duration):
+    // 8b  = dense/jungle: 16th note grid, tight swing
+    // 16b = normal: 8th note grid, light swing
+    // 32b = sparse/halftime: quarter note grid, no swing
+    const stepSec = loopBeats <= 8  ? masterBeatSec / 4   // 16th notes -- jungle bustle
+                  : loopBeats <= 16 ? masterBeatSec / 2   // 8th notes  -- standard
+                  :                   masterBeatSec;       // quarter notes -- halftime
+    const swing   = loopBeats <= 8  ? stepSec * 0.14      // pronounced swing when dense
+                  : loopBeats <= 16 ? stepSec * 0.06      // light swing
+                  :                   0;                   // straight when sparse
+    const halfSec = loopSec;
+    const sw = s => time + s * stepSec + (s % 2 === 1 ? swing : 0);
+    pat.filter(hit => hit.step * stepSec < halfSec).forEach(hit => {
+      const t = sw(hit.step);
+      if (hit.inst === 'kick')  fireKick(t, kickPitch, 0.55, hit.vel, fireOut);
+      if (hit.inst === 'snare') fireRoomSnare(t, snareTone, 0.22 + Math.random()*0.08, hit.vel, fireOut);
+      if (hit.inst === 'hat')   fireHat(t, hit.open, hit.vel * 0.85, fireOut);
+      if (hit.inst === 'tom')   fireTom(t, hit.pitch, 0.25, hit.vel, fireOut);
+      if (hit.inst === 'rim')   fireRim(t, hit.vel, fireOut);
+    });
+  };
+}
+
+// -- BREAK STYLE 6: CLAP TRAP -------------------------------------------------
+// Claps instead of snares, tight kick, hi-pass brightness. Effect: lo-fi phone filter.
+function buildDrumBreak_ClapTrap(terminal, loopBeats, density) {
+  const pat       = generateBreakPattern(density);
+  const kickPitch = 145 + Math.random() * 35;
+
+  // Lo-fi phone filter: bandpass 800-4000Hz
+  const bpf = ctx.createBiquadFilter(); bpf.type = 'bandpass'; bpf.frequency.value = 2000; bpf.Q.value = 0.5;
+  const lofiGain = ctx.createGain(); lofiGain.gain.value = 0.6;
+  const dryGain  = ctx.createGain(); dryGain.gain.value  = 0.5;
+  const outGain  = ctx.createGain(); outGain.gain.value  = 1.1;
+  outGain.connect(dryGain); dryGain.connect(terminal);
+  outGain.connect(bpf); bpf.connect(lofiGain); lofiGain.connect(terminal);
+
+  return function play(time, loopSec, density, drumNode) {
+    // Fresh gain for this fire -- will be faded out on next retrigger
+    const fireOut = ctx.createGain(); fireOut.gain.value = 1;
+    fireOut.connect(outGain);
+    if (drumNode) drumNode._drumOutGain = fireOut;
+    // Density from loop length: short=8b (jungle), medium=16b, long=32b
+    // density 1.0 = double-time 16th grid (jungle bustle)
+    // density 0.5 = normal 8th grid
+    // density 0.25 = half-time feel
+    // Step grid scales with loop length (press duration):
+    // 8b  = dense/jungle: 16th note grid, tight swing
+    // 16b = normal: 8th note grid, light swing
+    // 32b = sparse/halftime: quarter note grid, no swing
+    const stepSec = loopBeats <= 8  ? masterBeatSec / 4   // 16th notes -- jungle bustle
+                  : loopBeats <= 16 ? masterBeatSec / 2   // 8th notes  -- standard
+                  :                   masterBeatSec;       // quarter notes -- halftime
+    const swing   = loopBeats <= 8  ? stepSec * 0.14      // pronounced swing when dense
+                  : loopBeats <= 16 ? stepSec * 0.06      // light swing
+                  :                   0;                   // straight when sparse
+    const halfSec = loopSec;
+    pat.filter(hit => hit.step * stepSec < halfSec).forEach(hit => {
+      const t = time + hit.step * stepSec;
+      if (hit.inst === 'kick')  fireTightKick(t, kickPitch, hit.vel, fireOut);
+      if (hit.inst === 'snare') fireClap(t, hit.vel, fireOut);  // claps not snares
+      if (hit.inst === 'hat')   fireHat(t, hit.open, hit.vel, fireOut);
+      if (hit.inst === 'tom')   fireTom(t, hit.pitch, 0.18, hit.vel, fireOut);
+      if (hit.inst === 'rim')   fireRim(t, hit.vel, fireOut);
+    });
+  };
+}
+
+// -- BREAK STYLE 7: COWBELL DISCO ---------------------------------------------
+// Tight kicks, cowbell accents, driving hats. Effect: bright HPF + short plate.
+function buildDrumBreak_Disco(terminal, loopBeats, density) {
+  const pat       = generateBreakPattern(density);
+  const kickPitch = 160 + Math.random() * 30;
+  const snareTone = 220 + Math.random() * 40;
+
+  const hpf = ctx.createBiquadFilter(); hpf.type = 'highpass'; hpf.frequency.value = 120;
+  const air = ctx.createBiquadFilter(); air.type = 'highshelf'; air.frequency.value = 8000; air.gain.value = 4;
+  const rv = ctx.createConvolver();
+  const rvLen = Math.floor(ctx.sampleRate * 0.08);
+  const rvBuf = ctx.createBuffer(2, rvLen, ctx.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = rvBuf.getChannelData(ch);
+    for (let i = 0; i < rvLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/rvLen, 6);
+  }
+  rv.buffer = rvBuf;
+  const rvG = ctx.createGain(); rvG.gain.value = 0.15;
+  const outGain = ctx.createGain(); outGain.gain.value = 1.0;
+  outGain.connect(hpf); hpf.connect(air); air.connect(terminal);
+  outGain.connect(rv); rv.connect(rvG); rvG.connect(terminal);
+
+  return function play(time, loopSec, density, drumNode) {
+    // Fresh gain for this fire -- will be faded out on next retrigger
+    const fireOut = ctx.createGain(); fireOut.gain.value = 1;
+    fireOut.connect(outGain);
+    if (drumNode) drumNode._drumOutGain = fireOut;
+    // Density from loop length: short=8b (jungle), medium=16b, long=32b
+    // density 1.0 = double-time 16th grid (jungle bustle)
+    // density 0.5 = normal 8th grid
+    // density 0.25 = half-time feel
+    // Step grid scales with loop length (press duration):
+    // 8b  = dense/jungle: 16th note grid, tight swing
+    // 16b = normal: 8th note grid, light swing
+    // 32b = sparse/halftime: quarter note grid, no swing
+    const stepSec = loopBeats <= 8  ? masterBeatSec / 4   // 16th notes -- jungle bustle
+                  : loopBeats <= 16 ? masterBeatSec / 2   // 8th notes  -- standard
+                  :                   masterBeatSec;       // quarter notes -- halftime
+    const swing   = loopBeats <= 8  ? stepSec * 0.14      // pronounced swing when dense
+                  : loopBeats <= 16 ? stepSec * 0.06      // light swing
+                  :                   0;                   // straight when sparse
+    const halfSec = loopSec;
+    pat.filter(hit => hit.step * stepSec < halfSec).forEach(hit => {
+      const t = time + hit.step * stepSec;
+      if (hit.inst === 'kick')  fireTightKick(t, kickPitch, hit.vel, fireOut);
+      if (hit.inst === 'snare') fireSnare(t, snareTone, 0.10, hit.vel, fireOut);
+      if (hit.inst === 'hat')   fireHat(t, hit.open, hit.vel * 1.1, fireOut);
+      if (hit.inst === 'tom')   fireTom(t, hit.pitch * 1.2, 0.14, hit.vel, fireOut);
+      if (hit.inst === 'snare' && hit.vel > 0.75 && Math.random() > 0.5) {
+        fireCowbell(t, hit.vel * 0.5, outGain);
+      }
+    });
+  };
+}
+
+// -- BREAK STYLE 8: INDUSTRIAL ------------------------------------------------
+// Distorted, harsh, metallic. Effect: heavy saturation + resonant filter sweep.
+function buildDrumBreak_Industrial(terminal, loopBeats, density) {
+  const pat       = generateBreakPattern(density);
+  const kickPitch = 120 + Math.random() * 40;
+  const snareTone = 160 + Math.random() * 50;
+
+  const dist = ctx.createWaveShaper();
+  const dc = new Float32Array(256);
+  for (let i = 0; i < 256; i++) { const x = (i/128)-1; dc[i] = Math.tanh(x * 5) * 0.65; }
+  dist.curve = dc;
+  dist.oversample = '2x';
+  const rez = ctx.createBiquadFilter(); rez.type = 'bandpass'; rez.frequency.value = 1200; rez.Q.value = 5;
+  const rezGain = ctx.createGain(); rezGain.gain.value = 0.3;
+  const dryG = ctx.createGain(); dryG.gain.value = 0.75;
+  const outGain = ctx.createGain(); outGain.gain.value = 0.95;
+  outGain.connect(dist); dist.connect(dryG); dryG.connect(terminal);
+  dist.connect(rez); rez.connect(rezGain); rezGain.connect(terminal);
+
+  return function play(time, loopSec, density, drumNode) {
+    // Fresh gain for this fire -- will be faded out on next retrigger
+    const fireOut = ctx.createGain(); fireOut.gain.value = 1;
+    fireOut.connect(outGain);
+    if (drumNode) drumNode._drumOutGain = fireOut;
+    // Density from loop length: short=8b (jungle), medium=16b, long=32b
+    // density 1.0 = double-time 16th grid (jungle bustle)
+    // density 0.5 = normal 8th grid
+    // density 0.25 = half-time feel
+    // Step grid scales with loop length (press duration):
+    // 8b  = dense/jungle: 16th note grid, tight swing
+    // 16b = normal: 8th note grid, light swing
+    // 32b = sparse/halftime: quarter note grid, no swing
+    const stepSec = loopBeats <= 8  ? masterBeatSec / 4   // 16th notes -- jungle bustle
+                  : loopBeats <= 16 ? masterBeatSec / 2   // 8th notes  -- standard
+                  :                   masterBeatSec;       // quarter notes -- halftime
+    const swing   = loopBeats <= 8  ? stepSec * 0.14      // pronounced swing when dense
+                  : loopBeats <= 16 ? stepSec * 0.06      // light swing
+                  :                   0;                   // straight when sparse
+    const halfSec = loopSec;
+    const sweepHz = 400 + Math.random() * 800;
+    rez.frequency.setValueAtTime(sweepHz, time);
+    rez.frequency.linearRampToValueAtTime(sweepHz * 3, time + halfSec * 0.5);
+    rez.frequency.linearRampToValueAtTime(sweepHz, time + halfSec);
+
+    pat.filter(hit => hit.step * stepSec < halfSec).forEach(hit => {
+      const t = time + hit.step * stepSec;
+      if (hit.inst === 'kick')  fireKick(t, kickPitch, 0.5, hit.vel, fireOut);
+      if (hit.inst === 'snare') fireSnare(t, snareTone, hit.vel > 0.5 ? 0.16 : 0.07, hit.vel, fireOut);
+      if (hit.inst === 'hat')   fireHat(t, hit.open, hit.vel * 0.9, fireOut);
+      if (hit.inst === 'tom')   fireTom(t, hit.pitch * 0.9, 0.20, hit.vel * 1.1, fireOut);
+      if (hit.inst === 'rim')   fireRim(t, hit.vel, fireOut);
+    });
+  };
+}
+
+
+// -- BREAK STYLE 9: FILTER SWEEP -------------------------------------------------
+// Resonant filter sweeps across the break in real time.
+// Effect: automated lowpass sweep synced to break length, Q builds to peak then releases.
+function buildDrumBreak_Filter(terminal, loopBeats, density) {
+  const pat       = generateBreakPattern(density);
+  const kickPitch = 145 + Math.random() * 35;
+  const snareTone = 195 + Math.random() * 50;
+
+  const filt = ctx.createBiquadFilter();
+  filt.type = 'lowpass'; filt.frequency.value = 200; filt.Q.value = 6;
+  const filt2 = ctx.createBiquadFilter();
+  filt2.type = 'highpass'; filt2.frequency.value = 40;
+  const outGain = ctx.createGain(); outGain.gain.value = 1.05;
+  outGain.connect(filt); filt.connect(filt2); filt2.connect(terminal);
+
+  return function play(time, loopSec, density, drumNode) {
+    // Fresh gain for this fire -- will be faded out on next retrigger
+    const fireOut = ctx.createGain(); fireOut.gain.value = 1;
+    fireOut.connect(outGain);
+    if (drumNode) drumNode._drumOutGain = fireOut;
+    // Density from loop length: short=8b (jungle), medium=16b, long=32b
+    // density 1.0 = double-time 16th grid (jungle bustle)
+    // density 0.5 = normal 8th grid
+    // density 0.25 = half-time feel
+    // Step grid scales with loop length (press duration):
+    // 8b  = dense/jungle: 16th note grid, tight swing
+    // 16b = normal: 8th note grid, light swing
+    // 32b = sparse/halftime: quarter note grid, no swing
+    const stepSec = loopBeats <= 8  ? masterBeatSec / 4   // 16th notes -- jungle bustle
+                  : loopBeats <= 16 ? masterBeatSec / 2   // 8th notes  -- standard
+                  :                   masterBeatSec;       // quarter notes -- halftime
+    const swing   = loopBeats <= 8  ? stepSec * 0.14      // pronounced swing when dense
+                  : loopBeats <= 16 ? stepSec * 0.06      // light swing
+                  :                   0;                   // straight when sparse
+    const halfSec = loopSec;
+
+    // Sweep filter from dark to open across the break, then snap back
+    filt.frequency.cancelScheduledValues(time);
+    filt.frequency.setValueAtTime(120 + Math.random() * 80, time);
+    filt.frequency.exponentialRampToValueAtTime(7000 + Math.random() * 4000, time + halfSec * 0.75);
+    filt.frequency.exponentialRampToValueAtTime(200, time + halfSec);
+
+    // Resonance builds then releases
+    filt.Q.cancelScheduledValues(time);
+    filt.Q.setValueAtTime(4, time);
+    filt.Q.linearRampToValueAtTime(14 + Math.random() * 8, time + halfSec * 0.5);
+    filt.Q.linearRampToValueAtTime(3, time + halfSec);
+
+    pat.filter(hit => hit.step * stepSec < halfSec).forEach(hit => {
+      const t = time + hit.step * stepSec;
+      if (hit.inst === 'kick')  fireKick(t,  kickPitch, 0.55, hit.vel, fireOut);
+      if (hit.inst === 'snare') fireSnare(t, snareTone, hit.vel > 0.5 ? 0.15 : 0.07, hit.vel, fireOut);
+      if (hit.inst === 'hat')   fireHat(t,   hit.open,  hit.vel, fireOut);
+      if (hit.inst === 'tom')   fireTom(t,   hit.pitch, 0.20,    hit.vel, fireOut);
+      if (hit.inst === 'rim')   fireRim(t,   hit.vel, fireOut);
+    });
+  };
+}
+
+// -- UNIFIED PERC BUILDER -----------------------------------------------------
+const BREAK_BUILDERS = [
+  buildDrumBreak_BoomBap,
+  buildDrumBreak_Jungle,
+  buildDrumBreak_Trap,
+  buildDrumBreak_Funk,
+  buildDrumBreak_Soul,
+  buildDrumBreak_ClapTrap,
+  buildDrumBreak_Disco,
+  buildDrumBreak_Industrial,
+  buildDrumBreak_Filter,
+];
+
+function buildDrumBreak(node) {
+  const builder   = BREAK_BUILDERS[Math.floor(Math.random() * BREAK_BUILDERS.length)];
+  const terminal  = (node && node.fxIn) ? node.fxIn : drumBus;
+  const loopBeats = (node && node.loopBeats) ? node.loopBeats : 8;
+  const density   = (node && node.hitDensity != null) ? node.hitDensity : 1.0;
+  return builder(terminal, loopBeats, density);
+}
+
+// Legacy aliases so buildVoice dispatcher still works
+function build808Kick()  { return buildDrumBreak(); }
+function build808Snare() { return buildDrumBreak(); }
+function buildHihat()    { return buildDrumBreak(); }
+function buildRimshot()  { return buildDrumBreak(); }
+
+// -- ANALOG FAT BASS ----------------------------------------------------------
+// Four-oscillator analog bass: two detuned saws + square + deep sine sub.
+// Driven into a resonant lowpass with a punchy per-note envelope.
+// Glides between notes. Sounds like a Minimoog or Juno bass.
+function buildDoubleSawBass(hz, node) {
+  const detune     = 10 + Math.random() * 18;   // wide detuning -- thick, chorused
+  const filterLo   = 40  + Math.random() * 40;   // starts very closed
+  const filterPeak = 1200 + Math.random() * 2400; // sweeps way up -- dramatic
+  const filterQ    = 6   + Math.random() * 10;   // high resonance -- screams on sweep
+  const sweepTime  = 0.02 + Math.random() * 0.06; // fast attack sweep
+  const decayTime  = 0.4  + Math.random() * 0.6;  // slower decay for that dying-away feel
+  const glideTime  = 0.015 + Math.random() * 0.03;
+
+  const dest = (node && node.fxIn) ? node.fxIn : (node && node.synthBus) ? node.synthBus : synthBus;
+
+  // -- Oscillators --
+  // Two detuned saws for the classic chorus-like width
+  const s1 = ctx.createOscillator(); s1.type = 'sawtooth'; s1.frequency.value = hz;
+  const s2 = ctx.createOscillator(); s2.type = 'sawtooth'; s2.frequency.value = hz;
+  s1.detune.value =  detune;
+  s2.detune.value = -detune;
+
+  // Square wave adds odd harmonics and grit (mixed in lightly)
+  const sq = ctx.createOscillator(); sq.type = 'square'; sq.frequency.value = hz;
+  sq.detune.value = detune * 0.3;
+  const sqGain = ctx.createGain(); sqGain.gain.value = 0.28; // more square = more grit
+
+  // Deep sine sub -- one octave down, gives the chest-punch weight
+  const sub = ctx.createOscillator(); sub.type = 'sine'; sub.frequency.value = hz / 2;
+  const subGain = ctx.createGain(); subGain.gain.value = 0.75;
+
+  if (node) node.detuneNode = s1;
+
+  // -- Mixer --
+  const sawMix = ctx.createGain(); sawMix.gain.value = 0.50;
+
+  // -- Pre-filter soft drive -- gives the warm harmonic saturation of an analog filter input
+  const drive = ctx.createWaveShaper();
+  const dc = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const x = (i / 128) - 1;
+    dc[i] = Math.tanh(x * 3.5) * 0.78; // harder drive -- more harmonic grit
+  }
+  drive.curve = dc; drive.oversample = '4x';
+
+  // -- Resonant lowpass filter -- the heart of the sound
+  const filt = ctx.createBiquadFilter(); filt.type = 'lowpass';
+  filt.frequency.value = filterLo;
+  filt.Q.value = filterQ;
+
+  // Second filter pole for steeper rolloff (cascade = 24dB/oct feel)
+  const filt2 = ctx.createBiquadFilter(); filt2.type = 'lowpass';
+  filt2.frequency.value = filterLo * 1.8;
+  filt2.Q.value = 0.7;
+
+  // -- Amp envelope --
+  const ampEnv = ctx.createGain(); ampEnv.gain.value = 0;
+
+  // -- Stereo width: short delay on one channel --
+  const wideDelay = ctx.createDelay(0.02); wideDelay.delayTime.value = 0.006;
+  const wideGain  = ctx.createGain(); wideGain.gain.value = 0.3;
+
+  // -- Proximity filter modulation --
+  const proxFilter = ctx.createBiquadFilter(); proxFilter.type = 'lowpass';
+  proxFilter.frequency.value = filterLo + 600;
+  proxFilter.Q.value = filterQ * 0.6;
+  const proxGain = ctx.createGain(); proxGain.gain.value = 1;
+  proxFilter.connect(proxGain); proxGain.connect(dest);
+
+  if (node) {
+    node.filterNode   = proxFilter;
+    node.gainNode     = proxGain;
+    node.baseFilterQ  = filterQ;
+    node.baseFilterHz = filterLo + 600;
+  }
+
+  // -- Signal path --
+  s1.connect(sawMix); s2.connect(sawMix);
+  sq.connect(sqGain); sqGain.connect(sawMix);
+  sawMix.connect(drive);
+  sub.connect(subGain); subGain.connect(filt); // sub bypasses drive (stays clean)
+  drive.connect(filt);
+  filt.connect(filt2);
+  filt2.connect(ampEnv);
+  ampEnv.connect(proxFilter);
+  ampEnv.connect(wideDelay); wideDelay.connect(wideGain); wideGain.connect(proxFilter);
+
+  s1.start(); s2.start(); sq.start(); sub.start();
+  if (node) {
+    node._bassOscs  = [s1, s2, sq, sub];
+    node._bassNodes = { ampEnv, filt, filt2 };
+  }
+
+  return function play(time, noteDur, newHz) {
+    const freq = newHz || hz;
+
+    // Portamento glide -- schedule at the note's time, not ctx.currentTime
+    s1.frequency.setTargetAtTime(freq,      time, glideTime);
+    s2.frequency.setTargetAtTime(freq,      time, glideTime);
+    sq.frequency.setTargetAtTime(freq,      time, glideTime);
+    sub.frequency.setTargetAtTime(freq / 2, time, glideTime);
+
+    const qBoost = node ? node.proximityInfluence * 12 : 0;
+    filt.Q.value  = filterQ + qBoost;
+
+    // Filter envelope -- sharp attack sweep, dramatic rise, slow decay
+    filt.frequency.setValueAtTime(filterLo, time);
+    filt.frequency.linearRampToValueAtTime(filterPeak, time + sweepTime);
+    filt.frequency.exponentialRampToValueAtTime(filterLo * 1.8, time + sweepTime + decayTime);
+    filt2.frequency.setValueAtTime(filterLo * 2, time);
+    filt2.frequency.linearRampToValueAtTime(filterPeak * 1.3, time + sweepTime);
+    filt2.frequency.exponentialRampToValueAtTime(filterLo * 2.5, time + sweepTime + decayTime);
+
+    // Amplitude envelope -- hard transient, sustain, long release
+    ampEnv.gain.setValueAtTime(0.001, time);
+    ampEnv.gain.linearRampToValueAtTime(0.65, time + 0.005); // punchy attack
+    ampEnv.gain.exponentialRampToValueAtTime(0.38, time + 0.035);
+    ampEnv.gain.setValueAtTime(0.38, time + noteDur * 0.65);
+    ampEnv.gain.exponentialRampToValueAtTime(0.001, time + noteDur);
+  };
+}
+
+
+// -- ACID BASS ----------------------------------------------------------------
+// TB-303 inspired: square/saw + tight resonant filter with pitch slides
+function buildAcidBass(hz, node) {
+  const acidHz = hz;
+  const filterStart = 80 + Math.random() * 100;
+  const filterPeak  = 400 + Math.random() * 1200;
+  const resonance   = 8 + Math.random() * 12;
+  const slideTime   = 0.04 + Math.random() * 0.06;
+
+  return function play(time, noteDur) {
+    const dest = (node && node.fxIn) ? node.fxIn : (node && node.synthBus) ? node.synthBus : synthBus;
+    const osc = ctx.createOscillator();
+    osc.type = Math.random() > 0.4 ? 'sawtooth' : 'square';
+    // Pitch slide up from below (portamento feel)
+    osc.frequency.setValueAtTime(acidHz * 0.94, time);
+    osc.frequency.linearRampToValueAtTime(acidHz, time + slideTime);
+
+    const filt = ctx.createBiquadFilter(); filt.type = 'lowpass';
+    filt.Q.value = resonance;
+    filt.frequency.setValueAtTime(filterStart, time);
+    filt.frequency.exponentialRampToValueAtTime(filterPeak, time + 0.05 + Math.random()*0.05);
+    filt.frequency.exponentialRampToValueAtTime(filterStart * 1.5, time + noteDur * 0.6);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, time);
+    env.gain.linearRampToValueAtTime(0.38, time + 0.005);
+    env.gain.exponentialRampToValueAtTime(0.001, time + noteDur * 0.85);
+
+    osc.connect(filt); filt.connect(env); env.connect(dest);
+    osc.start(time); osc.stop(time + noteDur + 0.05);
+  };
+}
+
+// -- SAW LEAD -----------------------------------------------------------------
+// Sparse melodic fill -- two saws + ping-pong delay, no sirening
+function buildSawLead(hz, node) {
+  const detune = 6 + Math.random() * 8;
+  const filterBase = 500 + Math.random() * 500;
+  const filterUp   = filterBase * (1.8 + Math.random() * 1.5);
+
+  return function play(time, noteDur) {
+    const dest = (node && node.fxIn) ? node.fxIn : (node && node.synthBus) ? node.synthBus : synthBus;
+    const s1 = ctx.createOscillator(); s1.type = 'sawtooth'; s1.frequency.value = hz;
+    const s2 = ctx.createOscillator(); s2.type = 'sawtooth'; s2.frequency.value = hz;
+    s1.detune.value =  detune; s2.detune.value = -detune;
+
+    const filt = ctx.createBiquadFilter(); filt.type = 'lowpass';
+    filt.Q.value = 2 + Math.random() * 3;
+    filt.frequency.setValueAtTime(filterBase, time);
+    filt.frequency.linearRampToValueAtTime(filterUp, time + noteDur * 0.35);
+    filt.frequency.exponentialRampToValueAtTime(filterBase, time + noteDur);
+
+    const env = ctx.createGain();
+    env.gain.setValueAtTime(0, time);
+    env.gain.linearRampToValueAtTime(0.2, time + 0.015);
+    env.gain.setValueAtTime(0.2, time + noteDur * 0.6);
+    env.gain.exponentialRampToValueAtTime(0.001, time + noteDur);
+
+    const beatSec = 60 / bpm;
+    const dL = ctx.createDelay(1); dL.delayTime.value = beatSec * 0.5;
+    const dR = ctx.createDelay(1); dR.delayTime.value = beatSec * 0.75;
+    const fbL = ctx.createGain(); fbL.gain.value = 0.3;
+    const fbR = ctx.createGain(); fbR.gain.value = 0.25;
+    const wetGain = ctx.createGain(); wetGain.gain.value = 0.22;
+
+    s1.connect(filt); s2.connect(filt);
+    filt.connect(env);
+    env.connect(dest);
+    env.connect(dL); dL.connect(fbR); fbR.connect(dR); dR.connect(fbL); fbL.connect(dL);
+    dL.connect(wetGain); dR.connect(wetGain); wetGain.connect(dest);
+
+    s1.start(time); s2.start(time);
+    s1.stop(time + noteDur + 0.5); s2.stop(time + noteDur + 0.5);
+  };
+}
+
+// -- ARP SYSTEM ---------------------------------------------------------------
+// Bass position controls melody with clear musical axes:
+//   Y axis: top = melodically complex (more notes, wider intervals, syncopated)
+//            bottom = simple (fewer notes, root-focused, repetitive)
+//   X axis: slides through available scale degrees within the current complexity
+//            left = lower/root-centred notes, right = higher/colourful notes
+
+let arpSlotCounter = 0;
+let arpBassOffset  = 0;
+
+// Scale degrees available (semitones above root, within bass range)
+// Indexed so left=low/root, right=high/colourful
+const BASS_DEGREE_POOL = [0, 2, 3, 5, 7, 8, 10, 12, 14, 15];
+
+function buildPositionalArp(nx, ny) {
+  const scale    = SCALES[scaleType];
+  const rootMidi = 28 + Math.round(12 * Math.log2(rootHz / 41.2));
+
+  const yPos     = 1 - ny;
+  const numNotes = Math.max(3, Math.round(3 + yPos * 5)); // 3..8
+
+  // Build pool across 3 octaves in bass register
+  const allNotes = [];
+  for (let oct = 0; oct <= 3; oct++)
+    for (const deg of scale) {
+      const m = rootMidi + oct * 12 + deg;
+      if (m >= 24 && m <= 60) allNotes.push(m);
+    }
+  allNotes.sort((a, b) => a - b);
+
+  // X shifts register window, Y shifts upward
+  const xOffset = Math.floor(nx * (allNotes.length - numNotes));
+  const yOffset = Math.floor(yPos * 5);
+  const start   = Math.max(0, Math.min(allNotes.length - numNotes, xOffset + yOffset));
+  const pool    = allNotes.slice(start, start + numNotes);
+  if (pool.length < 2) return [midiToHz(rootMidi + 12)];
+
+  const n = pool.length;
+  const lo = pool[0], hi = pool[n - 1], mid = pool[Math.floor(n / 2)];
+
+  // 8 patterns across X -- each inspired by a different musical tradition
+  const zone = Math.floor(nx * 8);
+  let pattern;
+
+  switch (zone) {
+    case 0:
+      // Steve Reich / minimalist: short cell that shifts by one each time
+      // e.g. [0,2,4] then [1,3,5] -- we give one rotated instance
+      pattern = [...pool.slice(0, Math.min(4, n))];
+      // Rotate by 1 to give displaced feel
+      pattern = [...pattern.slice(1), pattern[0]];
+      break;
+
+    case 1:
+      // Jazz: chord tones with chromatic approach note before resolution
+      // Root -> 4th -> flat7 -> 3rd (sus resolution)
+      pattern = [
+        pool[0],
+        pool[Math.min(3, n-1)],
+        pool[Math.min(n-2, n-1)],
+        pool[Math.min(2, n-1)],
+        pool[Math.min(5, n-1)],
+        pool[1],
+      ].slice(0, numNotes);
+      break;
+
+    case 2:
+      // Afrobeat / funk: syncopated cells, repeating root with upper note stabs
+      pattern = [lo, mid, lo, lo, hi, mid, lo, pool[Math.min(2,n-1)]].slice(0, numNotes);
+      break;
+
+    case 3:
+      // Modal / Coltrane: wide interval jumps, fourths and fifths
+      pattern = [];
+      for (let i = 0; i < numNotes; i++) {
+        // Alternate between low and a fourth/fifth up
+        const base = pool[i % Math.ceil(n / 2)];
+        const leap = pool[Math.min(Math.ceil(n / 2) + i % Math.floor(n / 2), n - 1)];
+        pattern.push(i % 2 === 0 ? base : leap);
+      }
+      break;
+
+    case 4:
+      // Boards of Canada / IDM: descending with one unexpected high note
+      pattern = [...pool].reverse();
+      // Insert a high note at position 2 for surprise
+      if (pattern.length >= 4) pattern.splice(2, 0, hi);
+      pattern = pattern.slice(0, numNotes);
+      break;
+
+    case 5:
+      // Gamelan / world: pentatonic-feel skips (1-3-5-4-2-1)
+      pattern = [
+        pool[0],
+        pool[Math.min(2, n-1)],
+        pool[Math.min(4, n-1)],
+        pool[Math.min(3, n-1)],
+        pool[Math.min(1, n-1)],
+        pool[0],
+      ].slice(0, numNotes);
+      break;
+
+    case 6:
+      // Drum & bass / jungle: fast low note anchor with high stabs
+      pattern = [];
+      for (let i = 0; i < numNotes; i++) {
+        if (i % 3 === 0) pattern.push(lo);
+        else pattern.push(pool[Math.min(n - 1 - (i % Math.max(1, n - 2)), n - 1)]);
+      }
+      break;
+
+    default: // case 7
+      // Classical / baroque: sequence -- same shape transposed up by step
+      const shape = [0, 2, 1]; // step up, step back
+      pattern = [];
+      for (let i = 0; i < numNotes; i++) {
+        const base = Math.floor(i / shape.length);
+        const pos  = Math.min(base + shape[i % shape.length], n - 1);
+        pattern.push(pool[pos]);
+      }
+      break;
+  }
+
+  return pattern.map(midi => midiToHz(midi));
+}
+
+// Stub kept for compatibility
+function buildArpSequence(hz, slotIndex) {
+  return buildPositionalArp(0.3, 0.5);
+}
+
+const BASS_ARP_PATTERNS = [[0,3,5,3],[0,5,3,0],[0,2,3,2],[0,3,0,5],[5,3,0,2],[0,0,3,5]];
+const ARP_PATTERNS = BASS_ARP_PATTERNS;
+const CHORD_ROLES  = [0, 7, 3, 10, 5, 2, 7, 3];
+
+// Snap a MIDI note to the nearest degree of the current scale
+function snapToScale(midi, rootMidi, scale) {
+  const octave     = Math.floor((midi - rootMidi) / 12);
+  const semitone   = ((midi - rootMidi) % 12 + 12) % 12;
+  // Find nearest scale degree
+  const nearest    = scale.reduce((best, deg) =>
+    Math.abs(deg - semitone) < Math.abs(best - semitone) ? deg : best
+  );
+  return rootMidi + octave * 12 + nearest;
+}
+
+// --- NODE / LOOP SYSTEM ------------------------------------------------------
+
+let masterOriginTime = null; // ctx.currentTime when first node fires -- all nodes lock to this
+let beatTimerRef = null;
+const SCHEDULER_AHEAD    = 0.25;  // 250ms lookahead -- safely larger than interval jank
+const SCHEDULER_INTERVAL = 40;    // 40ms tick
+
+// Each node fires every node.loopBeats beats (its own loop length)
+// The scheduler advances a beat-accurate clock and fires nodes at their intervals
+
+function schedulerTick() {
+  if (!ctx || nodes.length === 0) return;
+  const now = ctx.currentTime;
+  const lookAheadUntil = now + SCHEDULER_AHEAD;
+
+  // Walk forward in time scheduling events
+  // We track each node's nextFireTime independently
+  nodes.forEach(node => {
+    while (node.nextFireTime < lookAheadUntil) {
+      const t = node.nextFireTime;
+      node.fire(t);
+      node.nextFireTime += node.loopSec;
+    }
+  });
+}
+
+function startScheduler() {
+  if (beatTimerRef) clearInterval(beatTimerRef);
+  beatTimerRef = setInterval(schedulerTick, SCHEDULER_INTERVAL);
+}
+
+// Convert a raw press duration (seconds) into a quantized loop length in beats
+// First press: snap to nearest musical beat count (1,2,4,8,16 bars * 4 beats)
+// Subsequent: snap to nearest musical fraction/multiple of masterLoopBeats
+const BEAT_SNAPS = [0.25, 0.5, 1, 2, 4, 8, 16, 32];
+
+function snapToBeats(rawSec) {
+  const rawBeats = rawSec / masterBeatSec;
+  // Find closest value in BEAT_SNAPS
+  return BEAT_SNAPS.reduce((best, b) =>
+    Math.abs(b - rawBeats) < Math.abs(best - rawBeats) ? b : best
+  );
+}
+
+function snapFirstLoop(rawSec) {
+  // For the first loop, raw press sec IS the loop. Snap BPM so the loop
+  // lands on a musical beat count from BEAT_SNAPS.
+  // We target ~120bpm as default feel, then adjust.
+  const targetBPMs = [70,80,85,90,95,100,105,110,115,120,125,128,130,140];
+  // Try each BPM, find which one makes rawSec snap cleanest to a BEAT_SNAP
+  let bestBPM = 120, bestBeats = 4, bestErr = Infinity;
+  targetBPMs.forEach(b => {
+    const beatSec = 60 / b;
+    const rawBeats = rawSec / beatSec;
+    const snapped = BEAT_SNAPS.reduce((best, s) =>
+      Math.abs(s - rawBeats) < Math.abs(best - rawBeats) ? s : best
+    );
+    const err = Math.abs(snapped - rawBeats);
+    if (err < bestErr) { bestErr = err; bestBPM = b; bestBeats = snapped; }
+  });
+  return { bpm: bestBPM, loopBeats: bestBeats };
+}
+
+// --- VISUAL ENGINE -----------------------------------------------------------
+
+const canvas = document.getElementById('c');
+const gfx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const PALETTE = [
+  [0, 220, 255],    // cyan
+  [180, 100, 255],  // violet
+  [255, 60, 120],   // hot pink
+  [60, 255, 160],   // mint
+  [255, 200, 50],   // amber
+  [255, 120, 40],   // orange
+  [100, 180, 255],  // sky
+];
+
+function rgb(c, a=1) { return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+
+class SynthNode {
+  constructor(x, y, color, loopBeats, noteDurSec, voiceType, hz, phaseOffsetSec = 0, pressSec = 1) {
+    this.x = x; this.y = y;
+    this.color = color;
+    this.loopBeats  = loopBeats;
+    this.loopSec    = loopBeats * masterBeatSec;
+    this.noteDurSec = noteDurSec;
+    this.voiceType  = voiceType;
+    this.hz         = hz;
+    this.phaseOffsetSec = phaseOffsetSec;
+
+    // Arpeggio: ALL synth voices arpeggiate -- each gets a unique slot
+    // so patterns and intervals differ between nodes
+    this.isArp = !PERC_TYPES.includes(voiceType);
+    if (this.isArp) {
+      this.arpSlot  = arpSlotCounter++;
+      // Start with position-derived notes -- updated live in update()
+      const nx0 = Math.max(0, Math.min(1, x / W));
+      const ny0 = Math.max(0, Math.min(1, y / H));
+      this.arpNotes = buildPositionalArp(nx0, ny0);
+      this.arpIndex = 0;
+      // Store last position used to detect meaningful movement
+      this.arpLastNx = nx0;
+      this.arpLastNy = ny0;
+    }
+
+    // Proximity interaction state
+    this.proximityInfluence = 0;
+    this._conductorPull     = -1; // -1 = never been touched by conductor
+    this.proximityNeighbors = [];
+    this.detuneOffset = 0;
+    this.gainNode   = null;
+    this.filterNode = null;
+    this.detuneNode = null;
+    this.baseFilterQ  = 3;
+    this.baseFilterHz = 400;
+
+    // Synth gain bus for drum-dominance ducking
+    if (!PERC_TYPES.includes(voiceType)) {
+      this.synthBus = ctx.createGain();
+      this.synthBus.gain.value = 0.55;
+      this.synthBus.connect(synthBus);
+    } else {
+      this.synthBus = null;
+    }
+
+    // -- POSITIONAL EFFECT -- drums and non-bass synths only
+    // Bass node uses position to control melody instead of timbre
+    // Drone always gets a tape delay -- saturated feedback path, wow/flutter, near-infinite
+    if (voiceType === 'drone') {
+      const beat    = masterBeatSec || 0.5;
+      const delTimes = [beat * 0.5, beat * 0.75, beat, beat * 1.5, beat * 2];
+      const delTime  = delTimes[Math.floor(Math.random() * delTimes.length)];
+      // Feedback 0.55-0.82 at spawn -- positional control adjusts from there
+      const fbAmt    = 0.55 + Math.random() * 0.27;
+      const wetAmt   = 0.50 + Math.random() * 0.30;
+      const dryAmt   = 0.55 + Math.random() * 0.25;
+
+      this.fxIn  = ctx.createGain(); this.fxIn.gain.value = 1;
+      this.fxOut = ctx.createGain(); this.fxOut.gain.value = 1;
+      this.fxOut.connect(this.synthBus || synthBus);
+
+      // Tape delay: saturation in the feedback path colours each repeat
+      const delay  = ctx.createDelay(1.0); delay.delayTime.value = delTime;
+
+      // Wow/flutter: modulate delay time via a sum node (iOS Safari doesn't support
+      // connecting directly to AudioParam from OscillatorNode in all versions)
+      const wowLFO  = ctx.createOscillator(); wowLFO.type = 'sine';
+      wowLFO.frequency.value = 0.4 + Math.random() * 0.3;
+      const flutLFO = ctx.createOscillator(); flutLFO.type = 'sine';
+      flutLFO.frequency.value = 3.5 + Math.random() * 2.5;
+      const wowDepth  = ctx.createGain(); wowDepth.gain.value = delTime * 0.001;  // ~0.1% -- barely perceptible
+      const flutDepth = ctx.createGain(); flutDepth.gain.value = delTime * 0.0003; // ~0.03% -- just texture
+      // Route through a GainNode sum into delayTime AudioParam
+      try {
+        wowLFO.connect(wowDepth);   wowDepth.connect(delay.delayTime);
+        flutLFO.connect(flutDepth); flutDepth.connect(delay.delayTime);
+      } catch(e) { /* iOS fallback -- no wow/flutter, delay still works */ }
+      wowLFO.start(); flutLFO.start();
+
+      // Tape saturation in feedback path -- each repeat gets warmer/darker
+      const tapeSat = ctx.createWaveShaper();
+      const tc = new Float32Array(256);
+      for (let i = 0; i < 256; i++) {
+        const x = (i / 128) - 1;
+        tc[i] = Math.tanh(x * 1.6) * 0.85; // soft, warm saturation
+      }
+      tapeSat.curve = tc;
+
+      // High-frequency rolloff in feedback -- tape loses treble each repeat
+      const tapeHPF = ctx.createBiquadFilter(); tapeHPF.type = 'lowpass';
+      tapeHPF.frequency.value = 4000 + Math.random() * 2000; // 4-6kHz rolloff
+      tapeHPF.Q.value = 0.5;
+
+      const fb  = ctx.createGain(); fb.gain.value = fbAmt;
+      const wet = ctx.createGain(); wet.gain.value = wetAmt;
+      const dry = ctx.createGain(); dry.gain.value = dryAmt;
+
+      // Path: fxIn -> delay -> tapeSat -> tapeHPF -> fb -> back to delay
+      //                     \-> wet -> fxOut
+      this.fxIn.connect(dry); dry.connect(this.fxOut);
+      this.fxIn.connect(delay);
+      delay.connect(tapeSat); tapeSat.connect(tapeHPF);
+      tapeHPF.connect(fb); fb.connect(delay); // saturated feedback loop
+      tapeHPF.connect(wet); wet.connect(this.fxOut);
+
+      this.fxNodes = { delay, fb, wet, dry, tapeSat, tapeHPF, wowLFO, flutLFO };
+      this.fxType  = 'delay';
+      this.fxLabel = 'TAPE';
+
+    } else if (voiceType === 'conductor') {
+      // Conductor: silent control node -- no audio output, just proximity effects
+      this.fxIn  = ctx.createGain(); this.fxIn.gain.value = 0; // silent
+      this.fxOut = ctx.createGain(); this.fxOut.gain.value = 0;
+      this.fxType  = null;
+      this.fxLabel = 'CTRL';
+
+    } else if (!this.isArp) {
+      // Pick effect not already in use -- only allow duplicates once all are taken
+      const usedEffects = nodes
+        .filter(n => n.fxType && POSITIONAL_EFFECT_TYPES.includes(n.fxType))
+        .map(n => n.fxType);
+      const available = POSITIONAL_EFFECT_TYPES.filter(e => !usedEffects.includes(e));
+      const pool = available.length > 0 ? available : POSITIONAL_EFFECT_TYPES;
+      this.fxType = pool[Math.floor(Math.random() * pool.length)];
+      this.fxIn   = ctx.createGain(); this.fxIn.gain.value = 1;
+      this.fxOut  = ctx.createGain(); this.fxOut.gain.value = 1;
+      const dest  = PERC_TYPES.includes(voiceType) ? drumBus : (this.synthBus || synthBus);
+      this.fxOut.connect(dest);
+      this._buildPositionalEffect();
+      const FX_LABELS = { overdrive:'OVR', tape:'TAPE', delay:'DLY', distortion:'DST', bitcrusher:'BIT' };
+      this.fxLabel = FX_LABELS[this.fxType] || this.fxType.slice(0,3).toUpperCase();
+    } else {
+      // Bass: gentle overdrive warmth -- soft tanh saturation + low shelf boost
+      this.fxIn  = ctx.createGain(); this.fxIn.gain.value = 1;
+      this.fxOut = ctx.createGain(); this.fxOut.gain.value = 1;
+      this.fxOut.connect(this.synthBus || synthBus);
+
+      const bassSat = ctx.createWaveShaper();
+      const bc = new Float32Array(256);
+      for (let i = 0; i < 256; i++) {
+        const x = (i / 128) - 1;
+        bc[i] = Math.tanh(x * 1.8) * 0.82; // warm soft clip, not harsh
+      }
+      bassSat.curve = bc; bassSat.oversample = '2x';
+
+      // Gentle low shelf to restore warmth lost in saturation
+      const bassShelf = ctx.createBiquadFilter();
+      bassShelf.type = 'lowshelf';
+      bassShelf.frequency.value = 200;
+      bassShelf.gain.value = 2.5;
+
+      this.fxIn.connect(bassSat);
+      bassSat.connect(bassShelf);
+      bassShelf.connect(this.fxOut);
+
+      this.fxType  = null;
+      this.fxLabel = 'BASS';
+    }
+
+    // Build voice AFTER fxIn exists so drum breaks can route through it
+    this.playFn = buildVoice(voiceType, hz, this);
+    this.nextFireTime = ctx.currentTime + 0.03;
+
+    // Visual -- size reflects loop length
+    // Visual size from raw press duration, mapped to a realistic hold range.
+    // Quick tap (0.1s) = small (~16px). Long hold (4s+) = large (~58px).
+    // Cube root gives good spread across the short end where most presses land.
+    const t = Math.pow(Math.max(0, Math.min(1, (pressSec - 0.1) / 4.0)), 0.4);
+    this.baseRadius = 16 + t * 42;
+    this.baseRadius = Math.min(Math.max(this.baseRadius, 14), 58);
+    this.pulseRadius = this.baseRadius;
+    this.pulseAlpha  = 0;
+    // Persistent slow-expanding bubble ring -- resets each loop fire
+    this.bubbleRing  = this.baseRadius;
+    this.bubbleAlpha = 0;
+    this.particles   = [];
+    this.alive       = true;
+  }
+
+  _buildPositionalEffect() {
+    // All effects use a compensating output gain to prevent hot signals
+    // from driving the bus too hard. Distortion effects get more reduction.
+    const dry    = ctx.createGain(); dry.gain.value    = 0.45;
+    const compGain = ctx.createGain(); // output level compensator
+    this.fxIn.connect(dry); dry.connect(this.fxOut);
+    this.fxDry   = dry;
+    this.fxCompGain = compGain;
+    compGain.connect(this.fxOut);
+
+    if (this.fxType === 'overdrive') {
+      // Soft-clip overdrive: warm asymmetric saturation
+      // X = drive (soft->hard), Y = tone (dark->bright)
+      // Compensator: overdrive adds ~6dB so pull back by half
+      compGain.gain.value = 0.45;
+      const preGain  = ctx.createGain(); preGain.gain.value = 1.5;
+      const shaper   = ctx.createWaveShaper();
+      shaper.curve   = makeDistortionCurve(20);
+      shaper.oversample = '4x';
+      const tone     = ctx.createBiquadFilter();
+      tone.type      = 'lowpass'; tone.frequency.value = 4000;
+      this.fxIn.connect(preGain); preGain.connect(shaper);
+      shaper.connect(tone); tone.connect(compGain);
+      this.fxNodes   = { preGain, shaper, tone };
+
+    } else if (this.fxType === 'tape') {
+      // Tape compression: subtle saturation + gentle compression + warmth
+      // X = saturation amount, Y = compression ratio
+      // Compensator: mild, needs little correction
+      compGain.gain.value = 0.65;
+      const sat    = ctx.createWaveShaper();
+      sat.curve    = makeDistortionCurve(5);
+      sat.oversample = '2x';
+      const comp   = ctx.createDynamicsCompressor();
+      comp.threshold.value = -18; comp.knee.value = 8;
+      comp.ratio.value     = 3;   comp.attack.value = 0.003;
+      comp.release.value   = 0.12;
+      const warmth = ctx.createBiquadFilter();
+      warmth.type  = 'lowshelf'; warmth.frequency.value = 300; warmth.gain.value = 2;
+      this.fxIn.connect(sat); sat.connect(comp); comp.connect(warmth);
+      warmth.connect(compGain);
+      this.fxNodes = { sat, comp, warmth };
+
+    } else if (this.fxType === 'delay') {
+      // Tempo-synced delay with feedback
+      // X = delay time, Y = feedback
+      // Compensator: delay adds signal, moderate pull-back
+      compGain.gain.value = 0.55;
+      const beat   = masterBeatSec || 0.5;
+      const delay  = ctx.createDelay(2.0); delay.delayTime.value = beat; // quarter note default
+      const fb     = ctx.createGain(); fb.gain.value = 0.35;
+      const delWet = ctx.createGain(); delWet.gain.value = 0.5;
+      this.fxIn.connect(delay);
+      delay.connect(fb); fb.connect(delay); // feedback loop
+      delay.connect(delWet); delWet.connect(compGain);
+      this.fxNodes = { delay, fb, delWet };
+
+    } else if (this.fxType === 'distortion') {
+      // Hard distortion: aggressive clipping + resonant filter for character
+      // X = amount (gritty->destroyed), Y = filter sweep
+      // Compensator: hard clipping needs significant pull-back
+      compGain.gain.value = 0.30;
+      const preGain  = ctx.createGain(); preGain.gain.value = 2.0;
+      const shaper   = ctx.createWaveShaper();
+      shaper.curve   = makeDistortionCurve(60);
+      shaper.oversample = '4x';
+      const rez      = ctx.createBiquadFilter();
+      rez.type       = 'bandpass'; rez.frequency.value = 1200; rez.Q.value = 4;
+      const rezMix   = ctx.createGain(); rezMix.gain.value = 0.4;
+      const dryPass  = ctx.createGain(); dryPass.gain.value = 0.6;
+      this.fxIn.connect(preGain); preGain.connect(shaper);
+      shaper.connect(dryPass); dryPass.connect(compGain);
+      shaper.connect(rez); rez.connect(rezMix); rezMix.connect(compGain);
+      this.fxNodes   = { preGain, shaper, rez, rezMix, dryPass };
+
+    } else { // bitcrusher
+      // Proper wet/dry bitcrusher with resonant filter
+      // X = dry/wet blend (left=clean, right=fully crushed)
+      // Y = resonant filter frequency (bottom=dark/rumble, top=bright/fizzy)
+      compGain.gain.value = 0.55;
+
+      // Resonant bandpass gives the crushed signal character
+      const crushFilt = ctx.createBiquadFilter();
+      crushFilt.type = 'bandpass';
+      crushFilt.frequency.value = 800;
+      crushFilt.Q.value = 3;
+
+      // Waveshaper for quantisation -- start at 6 bits (already gritty)
+      const crush = ctx.createWaveShaper();
+      crush.curve = makeCrusherCurve(6);
+      crush.oversample = 'none';
+
+      // Wet gain -- controls how much crushed signal comes through
+      const crushWet = ctx.createGain(); crushWet.gain.value = 0.0; // starts dry
+
+      // Route: fxIn -> crush -> crushFilt -> crushWet -> compGain
+      this.fxIn.connect(crush);
+      crush.connect(crushFilt);
+      crushFilt.connect(crushWet);
+      crushWet.connect(compGain);
+
+      this.fxNodes = { crush, crushFilt, crushWet };
+    }
+  }
+
+  updatePositionalEffect() {
+    if (!this.fxNodes || this.fxType === null) return;
+    const nx = Math.max(0, Math.min(1, this.x / W));
+    const ny = Math.max(0, Math.min(1, this.y / H));
+
+    // Drone tape delay: smooth continuous control, no tempo snapping
+    // X: delay time 80ms (left) to 600ms (right) -- smooth, no grid snapping
+    // Y: top = high feedback (0.88), bottom = sparse (0.40)
+    if (this.voiceType === 'drone') {
+      try {
+        const delTime = 0.08 + nx * 0.52; // 80ms to 600ms, smooth
+        const fb      = 0.88 - ny * 0.48; // 0.88 top to 0.40 bottom
+        const wet     = 0.35 + (1 - ny) * 0.30;
+        this.fxNodes.delay.delayTime.setTargetAtTime(delTime, ctx.currentTime, 0.3); // slow glide, no jerk
+        this.fxNodes.fb.gain.setTargetAtTime(fb,      ctx.currentTime, 0.4);
+        this.fxNodes.wet.gain.setTargetAtTime(wet,    ctx.currentTime, 0.3);
+      } catch(e) {}
+      return;
+    }
+
+    try {
+      if (this.fxType === 'overdrive') {
+        // X: drive 20->120, Y: tone 600->14000Hz
+        // Scale compensator inversely with drive so output stays consistent
+        const driveAmt = 20 + nx * 100;
+        this.fxNodes.shaper.curve = makeDistortionCurve(driveAmt);
+        this.fxNodes.preGain.gain.setTargetAtTime(1 + nx * 2, ctx.currentTime, 0.2);
+        this.fxNodes.tone.frequency.setTargetAtTime(600 + ny * 13400, ctx.currentTime, 0.2);
+        this.fxCompGain.gain.setTargetAtTime(0.5 - nx * 0.25, ctx.currentTime, 0.2);
+        this.fxDry.gain.setTargetAtTime(0.75 - nx * 0.4, ctx.currentTime, 0.3);
+
+      } else if (this.fxType === 'tape') {
+        // X: saturation 2->25, Y: compression ratio 2->8
+        const satAmt = 2 + nx * 23;
+        this.fxNodes.sat.curve = makeDistortionCurve(satAmt);
+        this.fxNodes.comp.ratio.setTargetAtTime(2 + ny * 6, ctx.currentTime, 0.3);
+        this.fxNodes.comp.threshold.setTargetAtTime(-10 - ny * 20, ctx.currentTime, 0.3);
+        this.fxNodes.warmth.gain.setTargetAtTime(nx * 6, ctx.currentTime, 0.4);
+        this.fxCompGain.gain.setTargetAtTime(0.7 - nx * 0.2, ctx.currentTime, 0.3);
+
+      } else if (this.fxType === 'delay') {
+        // X: snap to musical subdivision of current tempo
+        // subdivisions: 1/8, dotted 1/8, 1/4, dotted 1/4, 1/2, dotted 1/2, whole
+        const beat = masterBeatSec || 0.5;
+        const subdivisions = [
+          beat * 0.25,       // 16th note
+          beat * 0.375,      // dotted 16th
+          beat * 0.5,        // 8th note
+          beat * 0.75,       // dotted 8th
+          beat * 1.0,        // quarter note
+          beat * 1.5,        // dotted quarter
+          beat * 2.0,        // half note
+        ];
+        const subIdx  = Math.min(subdivisions.length - 1, Math.floor(nx * subdivisions.length));
+        const delTime = subdivisions[subIdx];
+        this.fxNodes.delay.delayTime.setTargetAtTime(delTime, ctx.currentTime, 0.05);
+        this.fxNodes.fb.gain.setTargetAtTime(0.05 + ny * 0.73, ctx.currentTime, 0.2);
+        this.fxNodes.delWet.gain.setTargetAtTime(0.2 + nx * 0.55, ctx.currentTime, 0.3);
+        this.fxDry.gain.setTargetAtTime(0.75 - nx * 0.35, ctx.currentTime, 0.3);
+
+      } else if (this.fxType === 'distortion') {
+        // X: amount 30->200, Y: resonant filter 200->6000Hz
+        const distAmt = 30 + nx * 170;
+        this.fxNodes.shaper.curve = makeDistortionCurve(distAmt);
+        this.fxNodes.preGain.gain.setTargetAtTime(1.5 + nx * 3, ctx.currentTime, 0.2);
+        this.fxNodes.rez.frequency.setTargetAtTime(200 + ny * 5800, ctx.currentTime, 0.2);
+        this.fxNodes.rez.Q.setTargetAtTime(2 + ny * 10, ctx.currentTime, 0.3);
+        // More drive = more output reduction to compensate
+        this.fxCompGain.gain.setTargetAtTime(0.35 - nx * 0.15, ctx.currentTime, 0.2);
+        this.fxDry.gain.setTargetAtTime(0.75 - nx * 0.5, ctx.currentTime, 0.3);
+
+      } else { // bitcrusher
+        // X: wet blend 0->1 (left=dry, right=fully crushed)
+        // Y: filter frequency bottom=200Hz (dark rumble) to top=8000Hz (fizzy)
+        const wetAmt = nx;
+        const bits   = Math.max(1, Math.round(6 - nx * 5)); // 6 bits down to 1 bit
+        // Only rebuild curve when bits value actually changes
+        const newBits = bits;
+        if (this._lastCrushBits !== newBits) {
+          this.fxNodes.crush.curve = makeCrusherCurve(newBits);
+          this._lastCrushBits = newBits;
+        }
+        this.fxNodes.crushWet.gain.setTargetAtTime(wetAmt * 0.9, ctx.currentTime, 0.1);
+        this.fxNodes.crushFilt.frequency.setTargetAtTime(200 + (1 - ny) * 7800, ctx.currentTime, 0.15);
+        this.fxNodes.crushFilt.Q.setTargetAtTime(1 + nx * 8, ctx.currentTime, 0.2);
+        this.fxDry.gain.setTargetAtTime(1 - nx * 0.6, ctx.currentTime, 0.1); // dry fades as wet increases
+        this.fxCompGain.gain.setTargetAtTime(0.6 - nx * 0.2, ctx.currentTime, 0.15);
+      }
+    } catch(e) {}
+  }
+
+  fire(time) {
+    if (this.isArp) {
+      const beat  = masterBeatSec || 0.5;
+      const step  = beat * 0.5; // always 8th notes
+
+      // Track loop count for variation
+      this._arpLoopCount = (this._arpLoopCount || 0) + 1;
+      const loopInCycle  = ((this._arpLoopCount - 1) % 4); // 0,1,2,3
+
+      const nx = Math.max(0, Math.min(1, this.x / W));
+      const ny = Math.max(0, Math.min(1, this.y / H));
+
+      let notes;
+      if (loopInCycle === 3) {
+        // Loop 4: variation -- build from a neighbouring zone (shift nx by 0.25)
+        // giving a different pattern shape but same register/key
+        const varNx = (nx + 0.3) % 1.0;
+        notes = buildPositionalArp(varNx, ny);
+      } else {
+        // Loops 1-3: main phrase
+        notes = this.arpNotes;
+      }
+
+      const count = notes.length;
+
+      // Loop length = exactly one full phrase
+      this.loopSec = count * step;
+
+      // Clear stale scheduled events from previous loop
+      try {
+        if (this._bassOscs) this._bassOscs.forEach(o => o.frequency.cancelScheduledValues(time));
+        if (this._bassNodes) {
+          this._bassNodes.ampEnv.gain.cancelScheduledValues(time);
+          this._bassNodes.filt.frequency.cancelScheduledValues(time);
+          this._bassNodes.filt2.frequency.cancelScheduledValues(time);
+        }
+      } catch(e) {}
+
+      for (let i = 0; i < count; i++) {
+        const noteTime = time + i * step;
+        const hz = notes[i];
+        try { this.playFn(noteTime, step * 0.92, hz); } catch(e) {}
+        this._pingArpNote(noteTime, i);
+      }
+    } else if (PERC_TYPES.includes(this.voiceType)) {
+      // Cut the previous loop immediately by fading its output gain to zero
+      if (this._drumOutGain) {
+        try {
+          this._drumOutGain.gain.cancelScheduledValues(ctx.currentTime);
+          this._drumOutGain.gain.setTargetAtTime(0, ctx.currentTime, 0.015);
+        } catch(e) {}
+      }
+      try { this.playFn(time, this.loopSec, this.hitDensity || 1.0, this); } catch(e) {}
+      this.pingVisual(time);
+    } else {
+      try { this.playFn(time, this.noteDurSec); } catch(e) {}
+      this.pingVisual(time);
+    }
+  }
+
+  _pingArpNote(scheduledTime, noteIdx) {
+    const delay = Math.max(0, (scheduledTime - ctx.currentTime) * 1000);
+    setTimeout(() => {
+      this._activeArpIdx = noteIdx;
+      this.pulseRadius = this.baseRadius;
+      this.pulseAlpha  = 1;
+      this.bubbleRing  = this.baseRadius;
+      this.bubbleAlpha = 0.55;
+    }, delay);
+  }
+
+  pingVisual(scheduledTime) {
+    const delay = Math.max(0, (scheduledTime - ctx.currentTime) * 1000);
+    setTimeout(() => {
+      this.pulseRadius = this.baseRadius;
+      this.pulseAlpha  = 1;
+      // Reset bubble ring -- expands slowly until next fire
+      this.bubbleRing  = this.baseRadius;
+      this.bubbleAlpha = 0.55;
+      for (let i = 0; i < 6; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const spd = 0.8 + Math.random() * 1.5;
+        this.particles.push({
+          x: this.x, y: this.y,
+          vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+          life: 1, decay: 0.04 + Math.random() * 0.04,
+          r: 1.5 + Math.random() * 2
+        });
+      }
+    }, delay);
+  }
+
+  update() {
+    // Bubble ring expands slowly from baseRadius, fades gradually
+    if (this.bubbleAlpha > 0) {
+      const maxRing = this.baseRadius + 60; // cap so it doesn't expand forever
+      if (this.bubbleRing < maxRing) {
+        this.bubbleRing += 0.4;
+      } else {
+        // Once at max, just fade
+        this.bubbleAlpha -= 0.008;
+      }
+      this.bubbleAlpha -= 0.002; // always fading too
+      if (this.bubbleAlpha < 0) this.bubbleAlpha = 0;
+    }
+
+    // Bass: rebuild melody from screen position whenever node moves
+    if (this.isArp && W > 0 && H > 0) {
+      const nx = Math.max(0, Math.min(1, this.x / W));
+      const ny = Math.max(0, Math.min(1, this.y / H));
+      const dx = Math.abs(nx - this.arpLastNx);
+      const dy = Math.abs(ny - this.arpLastNy);
+      if (dx > 0.005 || dy > 0.005) {
+        this.arpNotes  = buildPositionalArp(nx, ny);
+        this.arpLastNx = nx;
+        this.arpLastNy = ny;
+      }
+    }
+
+    // Expand pulse
+    if (this.pulseAlpha > 0) {
+      this.pulseRadius += 2.5;
+      this.pulseAlpha -= 0.018;
+    }
+    // Update particles
+    this.particles.forEach(p => {
+      p.x += p.vx; p.y += p.vy;
+      p.vx *= 0.97; p.vy *= 0.97;
+      p.life -= p.decay;
+    });
+    this.particles = this.particles.filter(p => p.life > 0);
+  }
+
+  draw() {
+    const c = this.color;
+    gfx.save();
+
+    // -- BUBBLE RINGS: trim arc angles so rings meet cleanly at flat walls --
+    // For each neighbouring node we compute the angle range on THIS ring
+    // that falls in the OTHER node's territory, and exclude it.
+    // A flat wall line connects the two arc endpoints exactly.
+
+    const drawBubbleRing = (ringR, alpha, lineW) => {
+      if (alpha <= 0 || ringR <= 0) return;
+
+      const exclusions = [];
+      nodes.forEach(other => {
+        if (other === this) return;
+        const dx   = other.x - this.x;
+        const dy   = other.y - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < 1 || dist > ringR + other.baseRadius * 2) return;
+
+        const tBound    = this.baseRadius / (this.baseRadius + other.baseRadius);
+        const boundDist = dist * tBound;
+        if (ringR <= boundDist) return;
+
+        const angleToOther = Math.atan2(dy, dx);
+        const cosHalf      = boundDist / ringR;
+        if (cosHalf >= 1) return;
+        const halfAngle = Math.acos(Math.max(-1, Math.min(1, cosHalf)));
+        if (!isFinite(halfAngle)) return;
+        exclusions.push({ angleToOther, halfAngle });
+      });
+
+      if (exclusions.length === 0) {
+        gfx.beginPath();
+        gfx.arc(this.x, this.y, ringR, 0, Math.PI * 2);
+        gfx.strokeStyle = rgb(c, alpha);
+        gfx.lineWidth   = lineW;
+        gfx.stroke();
+        return;
+      }
+
+      const ranges = exclusions.map(e => ({
+        a0: e.angleToOther - e.halfAngle,
+        a1: e.angleToOther + e.halfAngle
+      }));
+      ranges.sort((a, b) => a.a0 - b.a0);
+
+      for (let i = 0; i < ranges.length; i++) {
+        const cur     = ranges[i];
+        const next    = ranges[(i + 1) % ranges.length];
+        const arcStart = cur.a1;
+        const arcEnd   = i < ranges.length - 1 ? next.a0 : ranges[0].a0 + Math.PI * 2;
+
+        if (isFinite(arcStart) && isFinite(arcEnd) && arcEnd > arcStart + 0.01) {
+          gfx.beginPath();
+          gfx.arc(this.x, this.y, ringR, arcStart, arcEnd);
+          gfx.strokeStyle = rgb(c, alpha);
+          gfx.lineWidth   = lineW;
+          gfx.stroke();
+        }
+
+        // Flat wall connecting arc endpoints
+        const p1x = this.x + Math.cos(cur.a0) * ringR;
+        const p1y = this.y + Math.sin(cur.a0) * ringR;
+        const p2x = this.x + Math.cos(cur.a1) * ringR;
+        const p2y = this.y + Math.sin(cur.a1) * ringR;
+        if (isFinite(p1x) && isFinite(p1y) && isFinite(p2x) && isFinite(p2y)) {
+          gfx.beginPath();
+          gfx.moveTo(p1x, p1y);
+          gfx.lineTo(p2x, p2y);
+          gfx.strokeStyle = rgb(c, alpha * 0.8);
+          gfx.lineWidth   = lineW;
+          gfx.stroke();
+        }
+      }
+    };
+
+    if (this.pulseAlpha > 0) {
+      drawBubbleRing(this.pulseRadius, this.pulseAlpha * 0.7, 2);
+    }
+    if (this.bubbleAlpha > 0) {
+      drawBubbleRing(this.bubbleRing, this.bubbleAlpha, 1.2);
+    }
+
+    // Conductor: octopus -- soft body with writhing tentacles
+    // One tentacle latches onto each nearby drum node
+    if (this.voiceType === 'conductor') {
+      const r   = this.baseRadius;
+      const t   = Date.now() / 1000;
+      const CONDUCTOR_RADIUS = 120;
+
+      // Initialise per-tentacle phase offsets once
+      if (!this._tentPhase) {
+        this._tentPhase = Array.from({length: 8}, (_, i) => i * Math.PI * 2 / 8 + Math.random() * 0.5);
+      }
+
+      // Soft outer glow
+      const oGrad = gfx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r * 2.5);
+      oGrad.addColorStop(0, rgb(c, 0.18)); oGrad.addColorStop(1, rgb(c, 0));
+      gfx.beginPath(); gfx.arc(this.x, this.y, r * 2.5, 0, Math.PI * 2);
+      gfx.fillStyle = oGrad; gfx.fill();
+
+      // Find drums within range for tentacle attachment
+      const attachedDrums = nodes.filter(n =>
+        PERC_TYPES.includes(n.voiceType) &&
+        n.voiceType !== 'conductor' &&
+        Math.hypot(n.x - this.x, n.y - this.y) < CONDUCTOR_RADIUS
+      );
+
+      // Draw tentacles -- 8 total, some free-writhing, some latching to drums
+      const NUM_TENTACLES = 8;
+      for (let i = 0; i < NUM_TENTACLES; i++) {
+        const baseAngle = (i / NUM_TENTACLES) * Math.PI * 2 + this._tentPhase[i];
+        // Slow idle writhe
+        const writhAngle = baseAngle + Math.sin(t * 0.9 + i * 1.3) * 0.35;
+
+        // Check if this tentacle is claimed by a nearby drum
+        const drum = attachedDrums[i % attachedDrums.length];
+        const isAttached = attachedDrums.length > 0 && i < attachedDrums.length;
+
+        // Tentacle root on body edge
+        const rootX = this.x + Math.cos(writhAngle) * r * 0.7;
+        const rootY = this.y + Math.sin(writhAngle) * r * 0.7;
+
+        let tipX, tipY, cp1x, cp1y, cp2x, cp2y;
+
+        if (isAttached && drum) {
+          // Latch tentacle: tip reaches exactly to drum center
+          const dx = drum.x - this.x, dy = drum.y - this.y;
+          const dist = Math.hypot(dx, dy);
+          tipX = drum.x;
+          tipY = drum.y;
+          const perp = { x: -dy / dist, y: dx / dist };
+          const wave = Math.sin(t * 1.2 + i) * 18;
+          cp1x = rootX + (dx / dist) * dist * 0.3 + perp.x * wave;
+          cp1y = rootY + (dy / dist) * dist * 0.3 + perp.y * wave;
+          cp2x = tipX  - (dx / dist) * dist * 0.2 + perp.x * wave * 0.5;
+          cp2y = tipY  - (dy / dist) * dist * 0.2 + perp.y * wave * 0.5;
+
+          // Glow at attachment point
+          gfx.beginPath();
+          gfx.arc(tipX, tipY, 4 + Math.sin(t * 3 + i) * 1.5, 0, Math.PI * 2);
+          gfx.fillStyle = rgb(c, 0.7 + Math.sin(t * 4) * 0.2);
+          gfx.fill();
+        } else {
+          // Free-writhing tentacle -- curls in space
+          const tentLen = r * (1.8 + Math.sin(t * 0.7 + i * 2.1) * 0.4);
+          tipX = rootX + Math.cos(writhAngle + Math.sin(t * 0.8 + i) * 0.6) * tentLen;
+          tipY = rootY + Math.sin(writhAngle + Math.sin(t * 0.8 + i) * 0.6) * tentLen;
+          const curl = Math.sin(t * 1.1 + i * 1.7) * 20;
+          cp1x = rootX + Math.cos(writhAngle + 0.3) * tentLen * 0.4 + curl;
+          cp1y = rootY + Math.sin(writhAngle + 0.3) * tentLen * 0.4 - curl;
+          cp2x = tipX  - Math.cos(writhAngle) * tentLen * 0.2 - curl * 0.5;
+          cp2y = tipY  - Math.sin(writhAngle) * tentLen * 0.2 + curl * 0.5;
+        }
+
+        // Draw tentacle as tapered bezier
+        const tentAlpha = isAttached ? 0.75 : 0.45;
+        gfx.beginPath();
+        gfx.moveTo(rootX, rootY);
+        gfx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, tipX, tipY);
+        gfx.strokeStyle = rgb(c, tentAlpha);
+        gfx.lineWidth   = isAttached ? 2.5 : 1.5;
+        gfx.lineCap     = 'round';
+        gfx.stroke();
+      }
+
+      // Central soft body -- slightly pulsing
+      const pulse = 1 + Math.sin(t * 2.1) * 0.06;
+      const bGrad = gfx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r * pulse);
+      bGrad.addColorStop(0,   rgb(c, 0.95));
+      bGrad.addColorStop(0.5, rgb(c, 0.55));
+      bGrad.addColorStop(1,   rgb(c, 0.05));
+      gfx.beginPath(); gfx.arc(this.x, this.y, r * pulse, 0, Math.PI * 2);
+      gfx.fillStyle = bGrad; gfx.fill();
+
+      // Label
+      gfx.font = '8px "Share Tech Mono", monospace';
+      gfx.fillStyle = rgb(c, 0.45); gfx.textAlign = 'center';
+      gfx.fillText('CTRL', this.x, this.y + r * 1.4 + 10);
+
+      // Particles
+      this.particles.forEach(p => {
+        gfx.beginPath(); gfx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        gfx.fillStyle = rgb(c, p.life * 0.8); gfx.fill();
+      });
+      gfx.restore();
+      return;
+    }
+
+    // -- BASS ARP: segmented ring showing arp position --
+    if (this.voiceType === 'doublesawbass') {
+      const r   = this.baseRadius;
+      const seg = this.arpNotes ? this.arpNotes.length : 4;
+      const gap = 0.08;
+      const arc = (Math.PI * 2 / seg) - gap;
+      const activeIdx = (this._activeArpIdx !== undefined) ? this._activeArpIdx % seg : 0;
+
+      // Outer glow
+      const bGrad = gfx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r * 2.8);
+      bGrad.addColorStop(0, rgb(c, 0.18)); bGrad.addColorStop(1, rgb(c, 0));
+      gfx.beginPath(); gfx.arc(this.x, this.y, r * 2.8, 0, Math.PI * 2);
+      gfx.fillStyle = bGrad; gfx.fill();
+
+      // Core circle
+      const bCore = gfx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r);
+      bCore.addColorStop(0, rgb(c, 0.85)); bCore.addColorStop(0.5, rgb(c, 0.5)); bCore.addColorStop(1, rgb(c, 0.04));
+      gfx.beginPath(); gfx.arc(this.x, this.y, r, 0, Math.PI * 2);
+      gfx.fillStyle = bCore; gfx.fill();
+
+      // Inner bright dot
+      gfx.beginPath(); gfx.arc(this.x, this.y, r * 0.22, 0, Math.PI * 2);
+      gfx.fillStyle = rgb(c, 0.95); gfx.fill();
+
+      // Segmented ring -- segments at r*1.45, active segment glows bright
+      const ringR = r * 1.5;
+      for (let i = 0; i < seg; i++) {
+        const startA = -Math.PI / 2 + i * (Math.PI * 2 / seg) + gap / 2;
+        const isActive = (i === activeIdx);
+        gfx.beginPath();
+        gfx.arc(this.x, this.y, ringR, startA, startA + arc);
+        gfx.strokeStyle = rgb(c, isActive ? 0.95 : 0.22);
+        gfx.lineWidth   = isActive ? 3 : 1.5;
+        gfx.stroke();
+      }
+
+      // Label
+      gfx.font = '8px "Share Tech Mono", monospace';
+      gfx.fillStyle = rgb(c, 0.5); gfx.textAlign = 'center';
+      const bLabel = this.loopBeats < 1 ? '1/' + Math.round(1/this.loopBeats) : this.loopBeats + 'b';
+      gfx.fillText(bLabel + ' . BASS', this.x, this.y + ringR + 10);
+
+      // Particles
+      this.particles.forEach(p => {
+        gfx.beginPath(); gfx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        gfx.fillStyle = rgb(c, p.life * 0.8); gfx.fill();
+      });
+      gfx.restore();
+      return;
+    }
+
+    // -- DRONE: soft core with slow rotating outer ring --
+    if (this.voiceType === 'drone') {
+      const r = this.baseRadius;
+      if (!this._spinAngle) this._spinAngle = 0;
+      this._spinAngle += 0.004; // very slow rotation
+
+      // Wide soft glow -- breathes subtly
+      const dGlow = gfx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r * 3.2);
+      dGlow.addColorStop(0, rgb(c, 0.14)); dGlow.addColorStop(1, rgb(c, 0));
+      gfx.beginPath(); gfx.arc(this.x, this.y, r * 3.2, 0, Math.PI * 2);
+      gfx.fillStyle = dGlow; gfx.fill();
+
+      // Soft filled core -- no hard edge, very gradual
+      const dCore = gfx.createRadialGradient(this.x, this.y, 0, this.x, this.y, r * 1.2);
+      dCore.addColorStop(0,   rgb(c, 0.80));
+      dCore.addColorStop(0.5, rgb(c, 0.40));
+      dCore.addColorStop(1,   rgb(c, 0));
+      gfx.beginPath(); gfx.arc(this.x, this.y, r * 1.2, 0, Math.PI * 2);
+      gfx.fillStyle = dCore; gfx.fill();
+
+      // Slow rotating arc ring -- a single long arc that orbits the node
+      const ringR = r * 1.6;
+      const arcLen = Math.PI * 1.4; // 70% of circle
+      gfx.beginPath();
+      gfx.arc(this.x, this.y, ringR, this._spinAngle, this._spinAngle + arcLen);
+      gfx.strokeStyle = rgb(c, 0.55);
+      gfx.lineWidth   = 1.5;
+      gfx.stroke();
+
+      // Opposite shorter arc for balance
+      gfx.beginPath();
+      gfx.arc(this.x, this.y, ringR, this._spinAngle + Math.PI, this._spinAngle + Math.PI + arcLen * 0.4);
+      gfx.strokeStyle = rgb(c, 0.25);
+      gfx.lineWidth   = 1;
+      gfx.stroke();
+
+      // Label
+      gfx.font = '8px "Share Tech Mono", monospace';
+      gfx.fillStyle = rgb(c, 0.45); gfx.textAlign = 'center';
+      gfx.fillText('DRONE . TAPE', this.x, this.y + ringR + 10);
+
+      // Particles
+      this.particles.forEach(p => {
+        gfx.beginPath(); gfx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        gfx.fillStyle = rgb(c, p.life * 0.8); gfx.fill();
+      });
+      gfx.restore();
+      return;
+    }
+
+    // Outer soft glow
+    const grad = gfx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.baseRadius * 2.5);
+    grad.addColorStop(0, rgb(c, 0.15));
+    grad.addColorStop(1, rgb(c, 0));
+    gfx.beginPath();
+    gfx.arc(this.x, this.y, this.baseRadius * 2.5, 0, Math.PI * 2);
+    gfx.fillStyle = grad;
+    gfx.fill();
+
+    // Core circle
+    const coreGrad = gfx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.baseRadius);
+    coreGrad.addColorStop(0, rgb(c, 0.9));
+    coreGrad.addColorStop(0.4, rgb(c, 0.6));
+    coreGrad.addColorStop(1, rgb(c, 0.05));
+    gfx.beginPath();
+    gfx.arc(this.x, this.y, this.baseRadius, 0, Math.PI * 2);
+    gfx.fillStyle = coreGrad;
+    gfx.fill();
+
+    // Inner bright dot
+    gfx.beginPath();
+    gfx.arc(this.x, this.y, this.baseRadius * 0.25, 0, Math.PI * 2);
+    gfx.fillStyle = rgb(c, 0.95);
+    gfx.fill();
+
+    // Loop length + effect label
+    gfx.font = '8px "Share Tech Mono", monospace';
+    gfx.fillStyle = rgb(c, 0.5);
+    gfx.textAlign = 'center';
+    const loopLabel = this.loopBeats < 1
+      ? '1/' + Math.round(1/this.loopBeats)
+      : this.loopBeats + 'b';
+    gfx.fillText(loopLabel + ' . ' + (this.fxLabel || ''), this.x, this.y + this.baseRadius + 14);
+
+    // Particles
+    this.particles.forEach(p => {
+      gfx.beginPath();
+      gfx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      gfx.fillStyle = rgb(c, p.life * 0.8);
+      gfx.fill();
+    });
+
+    gfx.restore();
+  }
+}
+
+// Active touch growing circles -- expand while held, size reflects loop length
+class GrowingCircle {
+  constructor(x, y, color) {
+    this.x = x; this.y = y;
+    this.color = color;
+    this.radius = 6;
+    this.maxRadius = Math.min(W, H) * 0.42;
+    this.alive = true;
+    this.released = false;
+    this.releaseAlpha = 1;
+  }
+
+  grow(holdSec) {
+    // Radius grows with sqrt of hold time for natural feel, caps at maxRadius
+    this.radius = 6 + Math.sqrt(holdSec) * 80;
+    this.radius = Math.min(this.radius, this.maxRadius);
+  }
+
+  release() {
+    this.released = true;
+  }
+
+  update() {
+    if (this.released) {
+      this.releaseAlpha -= 0.04;
+      if (this.releaseAlpha <= 0) this.alive = false;
+    }
+  }
+
+  draw() {
+    const alpha = this.released
+      ? this.releaseAlpha * 0.4
+      : 0.55;
+    gfx.beginPath();
+    gfx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    gfx.strokeStyle = rgb(this.color, alpha);
+    gfx.lineWidth = this.released ? 1 : 1.5;
+    gfx.stroke();
+
+    // Inner fill when held
+    if (!this.released) {
+      const fill = gfx.createRadialGradient(this.x, this.y, 0, this.x, this.y, this.radius);
+      fill.addColorStop(0, rgb(this.color, 0.06));
+      fill.addColorStop(1, rgb(this.color, 0));
+      gfx.beginPath();
+      gfx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+      gfx.fillStyle = fill;
+      gfx.fill();
+    }
+  }
+}
+
+let growingCircles = [];
+let connections = [];
+
+const PROXIMITY_RADIUS = 160; // px -- tighter interaction zone
+
+function updateProximity() {
+  if (nodes.length < 2) return;
+
+  // Reset all nodes' proximity state
+  nodes.forEach(n => {
+    n.proximityInfluence = 0;  // 0..1, sum of all neighbor pulls
+    n.proximityNeighbors = []; // list of { node, influence }
+  });
+
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      if (dist >= PROXIMITY_RADIUS) continue;
+
+      const inf = 1 - dist / PROXIMITY_RADIUS; // 0..1, stronger when closer
+      a.proximityInfluence = Math.min(1, a.proximityInfluence + inf);
+      b.proximityInfluence = Math.min(1, b.proximityInfluence + inf);
+      a.proximityNeighbors.push({ node: b, inf });
+      b.proximityNeighbors.push({ node: a, inf });
+
+      // -- EFFECT 1: PITCH DRIFT ------------------------------------------
+      // Synth nodes slowly detune toward each other -- creates beating/chorus.
+      // Applied gradually so it feels organic, not snappy.
+      const isSynthA = !PERC_TYPES.includes(a.voiceType);
+      const isSynthB = !PERC_TYPES.includes(b.voiceType);
+      if (isSynthA && isSynthB && a.detuneNode && b.detuneNode) {
+        const pull = inf * 8; // max +/-8 cents of mutual pull
+        const aTarget = (b.hz - a.hz > 0 ? 1 : -1) * pull;
+        const bTarget = -aTarget;
+        a.detuneOffset = a.detuneOffset * 0.97 + aTarget * 0.03;
+        b.detuneOffset = b.detuneOffset * 0.97 + bTarget * 0.03;
+        try { a.detuneNode.detune.setTargetAtTime(a.detuneOffset, ctx.currentTime, 0.1); } catch(e) {}
+        try { b.detuneNode.detune.setTargetAtTime(b.detuneOffset, ctx.currentTime, 0.1); } catch(e) {}
+      }
+
+      // -- EFFECT 2: FILTER RESONANCE boost -- handled per-node below
+    }
+  }
+
+  // Filter resonance on bass: driven by conductor proximity, not drums
+  // Find conductor and bass nodes
+  const conductor = nodes.find(n => n.voiceType === 'conductor');
+  const bassNodes = nodes.filter(n => n.voiceType === 'doublesawbass');
+
+  bassNodes.forEach(bass => {
+    if (!bass.filterNode) return;
+    let inf = 0;
+    if (conductor) {
+      const dist = Math.hypot(conductor.x - bass.x, conductor.y - bass.y);
+      const COND_FILTER_RADIUS = 120;
+      if (dist < COND_FILTER_RADIUS) {
+        inf = Math.pow(1 - dist / COND_FILTER_RADIUS, 1.5); // stronger when close
+      }
+    }
+    // Store on bass node so play() can use it for per-note Q boost too
+    bass.proximityInfluence = inf;
+    const targetQ  = bass.baseFilterQ  + inf * 14; // wide resonance peak when close
+    const targetHz = bass.baseFilterHz + inf * 1200; // filter opens up significantly
+    try {
+      bass.filterNode.Q.setTargetAtTime(targetQ,  ctx.currentTime, 0.2);
+      bass.filterNode.frequency.setTargetAtTime(targetHz, ctx.currentTime, 0.2);
+    } catch(e) {}
+  });
+}
+
+function drawBubbleBoundaries() {
+  if (nodes.length < 2) return;
+
+  for (let i = 0; i < nodes.length; i++) {
+    for (let j = i + 1; j < nodes.length; j++) {
+      const a = nodes[i], b = nodes[j];
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+
+      // Bubbles only form a shared wall when they overlap or are very close
+      const sumR  = a.baseRadius + b.baseRadius;
+      if (dist > sumR * 1.6) continue;
+
+      // Plateau boundary position: weighted by radius (larger bubble wins more space)
+      // t=0 means boundary at a's center, t=1 at b's center
+      const t = a.baseRadius / (a.baseRadius + b.baseRadius);
+      const bx = a.x + (b.x - a.x) * t;
+      const by = a.y + (b.y - a.y) * t;
+
+      // Perpendicular direction to the line between centers
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy) || 1;
+      const px = -dy / len, py = dx / len; // perpendicular unit vector
+
+      // Wall length scales with how much they overlap
+      const overlap = Math.max(0, 1 - dist / sumR);
+      const wallLen = Math.min(a.baseRadius, b.baseRadius) * (0.8 + overlap * 1.2);
+
+      // Fade based on distance -- closer = more opaque
+      const alpha = Math.min(0.7, overlap * 1.5 + 0.15);
+
+      // Draw the flat boundary wall -- blend the two node colors
+      gfx.beginPath();
+      gfx.moveTo(bx - px * wallLen, by - py * wallLen);
+      gfx.lineTo(bx + px * wallLen, by + py * wallLen);
+
+      // Gradient along the wall from a's color to b's color
+      const grad = gfx.createLinearGradient(
+        bx - px * wallLen, by - py * wallLen,
+        bx + px * wallLen, by + py * wallLen
+      );
+      grad.addColorStop(0,   rgb(a.color, alpha));
+      grad.addColorStop(0.5, rgb(a.color, alpha * 0.6));
+      grad.addColorStop(0.5, rgb(b.color, alpha * 0.6));
+      grad.addColorStop(1,   rgb(b.color, alpha));
+
+      gfx.strokeStyle = grad;
+      gfx.lineWidth   = 1.5 + overlap * 2;
+      gfx.stroke();
+
+      // Small bright dot at the junction point (triple point feel)
+      gfx.beginPath();
+      gfx.arc(bx, by, 2 + overlap * 2, 0, Math.PI * 2);
+      gfx.fillStyle = rgb(a.color, alpha * 0.8);
+      gfx.fill();
+    }
+  }
+}
+
+function updateConductor() {
+  const conductors = nodes.filter(n => n.voiceType === 'conductor');
+  if (conductors.length === 0) return;
+  if (!masterOriginTime) return;
+  const now  = ctx.currentTime;
+  const beat = masterBeatSec || 0.5;
+  const CONDUCTOR_RADIUS = 120; // tight -- must be deliberately placed on a drum
+
+  // Musical subdivisions from fastest to slowest
+  const SUBDIVISIONS = [
+    beat * 0.0625,// 64th note
+    beat * 0.125, // 32nd note
+    beat * 0.25,  // 16th note
+    beat * 0.5,   // 8th note
+    beat * 1,     // quarter
+    beat * 2,     // half note
+    beat * 4,     // whole note
+    beat * 8,     // 2 bars
+  ];
+
+  conductors.forEach(cond => {
+    nodes.forEach(drum => {
+      if (!PERC_TYPES.includes(drum.voiceType)) return;
+      if (drum.voiceType === 'conductor') return;
+
+      // Initialise pull state on first encounter so snap-back never fires spuriously
+      if (drum._conductorPull === undefined) drum._conductorPull = -1;
+
+      const dist = Math.hypot(cond.x - drum.x, cond.y - drum.y);
+
+      if (dist >= CONDUCTOR_RADIUS) {
+        // Only snap back if we were actively pulling this drum (pull > 0)
+        if (drum._conductorPull > 0) {
+          drum._conductorPull = 0;
+          // Restore drum to its own loop grid anchored at its original first-fire phase
+          const anchor  = masterOriginTime + (drum.phaseOffsetSec || 0);
+          const elapsed = now - anchor;
+          const cyclesSoFar = Math.floor(elapsed / drum.loopSec);
+          let nextNatural = anchor + (cyclesSoFar + 1) * drum.loopSec;
+          // Ensure it's in the future
+          while (nextNatural < now + 0.05) nextNatural += drum.loopSec;
+          drum.nextFireTime = nextNatural;
+        }
+        return;
+      }
+
+      const linear = 1 - dist / CONDUCTOR_RADIUS;
+      const inf     = Math.pow(linear, 2);
+      drum._conductorPull = inf;
+
+      // Pick subdivision based on proximity
+      const subIdx          = Math.min(Math.floor((1 - inf) * SUBDIVISIONS.length), SUBDIVISIONS.length - 1);
+      const subInterval     = SUBDIVISIONS[subIdx];
+      const effectiveInterval = Math.min(subInterval, drum.loopSec);
+
+      // Next grid point anchored to masterOriginTime at chosen subdivision
+      const elapsed       = now - masterOriginTime;
+      const cyclesSoFar   = Math.floor(elapsed / effectiveInterval);
+      const nextGridPoint = masterOriginTime + (cyclesSoFar + 1) * effectiveInterval;
+
+      if (nextGridPoint < drum.nextFireTime) {
+        drum.nextFireTime = nextGridPoint;
+      }
+    });
+  });
+}
+
+// --- MAIN LOOP ---------------------------------------------------------------
+
+let frameCount = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  frameCount++;
+
+  try {
+    // Fade trail
+    gfx.fillStyle = 'rgba(0,0,0,0.18)';
+    gfx.fillRect(0, 0, W, H);
+
+    updateProximity();
+    updateConductor();
+    drawVoidZone();
+
+    // Update active (held) growing circles each frame
+    const now = performance.now();
+    Object.values(activeTouches).forEach(td => {
+      if (td.growCircle && td.startTime && !td.dragging) {
+        const held = (now - td.startTime) / 1000;
+        td.growCircle.grow(held);
+      }
+    });
+
+    growingCircles.forEach(g => { g.update(); g.draw(); });
+    growingCircles = growingCircles.filter(g => g.alive);
+
+    nodes.forEach(n => { n.update(); n.updatePositionalEffect(); n.draw(); });
+  } catch(e) {
+    // Show error on screen so we can see it through cross-origin restrictions
+    if (!window._errShown) {
+      window._errShown = true;
+      const d = document.createElement('div');
+      d.style.cssText = 'position:fixed;top:30px;left:0;right:0;background:#c00;color:#fff;padding:8px;z-index:9999;font:11px monospace;word-break:break-all;white-space:pre-wrap';
+      d.textContent = 'LOOP ERR: ' + e.message + '\n' + (e.stack || '');
+      document.body.appendChild(d);
+    }
+  }
+}
+const splash = document.getElementById('splash');
+const splashBtn = document.getElementById('splash-btn');
+const hint = document.getElementById('hint');
+const bpmVal = document.getElementById('bpm-val');
+const nodeCount = document.getElementById('node-count');
+loop();
+
+// --- INTERACTION -------------------------------------------------------------
+
+
+function getColor() {
+  return PALETTE[Math.floor(Math.random() * PALETTE.length)];
+}
+
+function getVoiceType(index) {
+  if (index === 0) return 'doublesawbass';
+  // Bass spawns whenever no doublesawbass present
+  const hasBass = nodes.some(n => n.voiceType === 'doublesawbass');
+  if (!hasBass) return 'doublesawbass';
+  // After 3 drums exist, next spawn is conductor (if none exists yet)
+  const drumCount = nodes.filter(n => PERC_TYPES.includes(n.voiceType)).length;
+  const hasConductor = nodes.some(n => n.voiceType === 'conductor');
+  if (drumCount >= 3 && !hasConductor) return 'conductor';
+  return 'drumbreak';
+}
+
+function onTouchStart(e) {
+  e.preventDefault();
+  if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  hint.style.opacity = '0';
+
+  Array.from(e.changedTouches).forEach(touch => {
+    const x = touch.clientX, y = touch.clientY;
+
+    // Check if touch hits an existing node -- if so, enter drag mode
+    const hitNode = [...nodes].reverse().find(n => {
+      const dist = Math.hypot(n.x - x, n.y - y);
+      return dist < n.baseRadius + 16; // generous hit target
+    });
+
+    if (hitNode) {
+      activeTouches[touch.identifier] = {
+        dragging: hitNode,
+        startTime: null,
+        growCircle: null
+      };
+      voidActive = true; // show void zone when dragging
+      return;
+    }
+
+    // New node mode -- same as before
+    const color = getColor();
+    const growCircle = new GrowingCircle(x, y, color);
+    growingCircles.push(growCircle);
+    activeTouches[touch.identifier] = {
+      startTime: performance.now(),
+      x, y, color,
+      growCircle,
+      dragging: null
+    };
+  });
+}
+
+function onTouchMove(e) {
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(touch => {
+    const td = activeTouches[touch.identifier];
+    if (!td) return;
+
+    if (td.dragging) {
+      td.dragging.x = touch.clientX;
+      td.dragging.y = touch.clientY;
+
+      // Check if over void zone (bottom strip)
+      voidEngulfing = isInVoidZone(td.dragging.x, td.dragging.y);
+    } else if (td.growCircle && td.startTime) {
+      const held = (performance.now() - td.startTime) / 1000;
+      td.growCircle.grow(held);
+    }
+  });
+}
+
+function onTouchEnd(e) {
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(touch => {
+    const td = activeTouches[touch.identifier];
+    if (!td) return;
+
+    // If we were dragging, check if dropped in void zone
+    if (td.dragging) {
+      if (isInVoidZone(td.dragging.x, td.dragging.y)) {
+        destroyNode(td.dragging);
+      }
+      voidActive    = false;
+      voidEngulfing = false;
+      delete activeTouches[touch.identifier];
+      return;
+    }
+
+    try {
+    const pressSec = (performance.now() - td.startTime) / 1000;
+    const clampedSec = Math.max(0.1, Math.min(pressSec, 8));
+
+    if (td.growCircle) td.growCircle.release();
+
+    if (nodes.length === 0) {
+      // -- FIRST LOOP: press duration sets BPM + loop length --
+      const { bpm: detectedBPM, loopBeats } = snapFirstLoop(clampedSec);
+      bpm = detectedBPM;
+      masterBeatSec   = 60 / bpm;
+      masterLoopBeats = loopBeats;
+
+      // The 16th note grid unit in seconds
+      // (used for phase offsets on all nodes)
+      masterSixteenthSec      = masterBeatSec / 4;
+      masterThirtySecondSec   = masterBeatSec / 8;
+
+      rootHz    = ROOTS[Math.floor(Math.random() * ROOTS.length)];
+      scaleType = Object.keys(SCALES)[Math.floor(Math.random() * Object.keys(SCALES).length)];
+      arpBassOffset = Math.floor(Math.random() * BASS_ARP_PATTERNS.length);
+
+      bpmVal.textContent = bpm;
+      startScheduler();
+
+      const voiceType  = getVoiceType(0);
+      const isPerc     = PERC_TYPES.includes(voiceType);
+      const hz         = isPerc ? 0 : getQuantizedNote('bass');
+      const noteDurSec = isPerc ? masterBeatSec * 0.45 : clampedSec * 0.88;
+      const node = new SynthNode(td.x, td.y, td.color, loopBeats, noteDurSec, voiceType, hz, 0, clampedSec);
+      // First node fires as soon as possible -- sets the master clock
+      masterOriginTime    = ctx.currentTime + 0.05;
+      node.nextFireTime   = masterOriginTime;
+      nodes.push(node);
+      nodeCount.textContent = nodes.length;
+
+    } else {
+      // -- SUBSEQUENT LOOPS: loop length from press, phase from 16th grid --
+      const rawBeats   = clampedSec / masterBeatSec;
+      const multiples  = [0.125, 0.25, 0.5, 1, 2, 4, 8]
+        .map(m => masterLoopBeats * m)
+        .filter(b => b >= 0.25 && b <= 32);
+      const loopBeats  = multiples.reduce((best, b) =>
+        Math.abs(b - rawBeats) < Math.abs(best - rawBeats) ? b : best
+      );
+      const loopSec    = loopBeats * masterBeatSec;
+
+      let voiceType  = getVoiceType(nodes.length);
+      const isPerc   = PERC_TYPES.includes(voiceType);
+
+      let finalLoopBeats;
+      if (isPerc) {
+        const drumSnaps = [8, 16, 32];
+        finalLoopBeats = drumSnaps.reduce((best, b) =>
+          Math.abs(b - rawBeats) < Math.abs(best - rawBeats) ? b : best
+        );
+      } else {
+        // Bass respawn uses same loop length as the first node had
+        finalLoopBeats = loopBeats;
+      }
+      const finalLoopSec = finalLoopBeats * masterBeatSec;
+
+      const hz         = isPerc ? 0 : getQuantizedNote('bass');
+      const noteDurSec = isPerc ? finalLoopSec : finalLoopSec * 0.88;
+
+      // Drum density: short press = sparse (1-2 hits), long press = full pattern
+      // Map clampedSec (0.1 to 8s) to density (0.15 to 1.0)
+      const hitDensity = isPerc ? Math.max(0.15, Math.min(1.0, clampedSec / 4.0)) : 1.0;
+
+      const node = new SynthNode(td.x, td.y, td.color, finalLoopBeats, noteDurSec, voiceType, hz, 0, clampedSec);
+      if (isPerc) node.hitDensity = hitDensity;
+      const now  = ctx.currentTime;
+
+      if (isPerc) {
+        // Drums: fire on next beat boundary
+        const elapsed      = now - masterOriginTime;
+        const beatsSoFar   = Math.floor(elapsed / masterBeatSec);
+        const nextBeatTime = masterOriginTime + (beatsSoFar + 1) * masterBeatSec;
+        node.nextFireTime  = (nextBeatTime - now < 0.08)
+          ? masterOriginTime + (beatsSoFar + 2) * masterBeatSec
+          : nextBeatTime;
+        // Store this as the drum's personal phase anchor so snap-back restores it correctly
+        node.phaseOffsetSec = node.nextFireTime - masterOriginTime;
+      } else {
+        // Bass respawn: align to nearest loop boundary
+        const elapsed      = now - masterOriginTime;
+        const cyclesSoFar  = Math.floor(elapsed / finalLoopSec);
+        const prevBoundary = masterOriginTime + cyclesSoFar * finalLoopSec;
+        const nextBoundary = prevBoundary + finalLoopSec;
+        node.nextFireTime  = (now - prevBoundary) < (nextBoundary - now)
+          ? prevBoundary : nextBoundary;
+        while (node.nextFireTime < now + 0.04) node.nextFireTime += finalLoopSec;
+      }
+
+      nodes.push(node);
+
+      nodeCount.textContent = nodes.length;
+    }
+
+    } catch(err) { console.log('SPAWN ERR:', err && err.message, err && err.stack ? err.stack.split('\n').slice(0,5).join(' | ') : ''); }
+    delete activeTouches[touch.identifier];
+  });
+}
+
+
+// --- iOS AUDIO UNLOCK --------------------------------------------------------
+
+splashBtn.addEventListener('touchend', unlockAudio, { passive: false });
+splashBtn.addEventListener('click', unlockAudio);
+
+function unlockAudio(e) {
+  e.preventDefault();
+  // Create and immediately resume AudioContext inside this gesture
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  ctx.resume().then(() => {
+    // Play a silent buffer to fully unlock iOS audio
+    const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    src.start(0);
+
+    // Build master chain now that context is live
+    buildMasterChain();
+
+    splash.classList.add('hidden');
+    setTimeout(() => { splash.style.display = 'none'; }, 700);
+  });
+}
+
+canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+canvas.addEventListener('touchend', onTouchEnd, { passive: false });
+canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+canvas.addEventListener('touchcancel', onTouchEnd, { passive: false });
+
+// Mouse fallback for desktop testing
+canvas.addEventListener('mousedown', (e) => {
+  const fake = { identifier: 'mouse', clientX: e.clientX, clientY: e.clientY };
+  onTouchStart({ preventDefault(){}, changedTouches: [fake] });
+});
+canvas.addEventListener('mouseup', (e) => {
+  const fake = { identifier: 'mouse', clientX: e.clientX, clientY: e.clientY };
+  onTouchEnd({ preventDefault(){}, changedTouches: [fake] });
+});
+
+// Clear button
+// --- VOID ZONE ---------------------------------------------------------------
+// A circular destruction area at the bottom center. Appears when dragging a node.
+// Drag a node into it -> node dissolves and is removed.
+
+// ---- VOID ZONE ----
+
+function getVoidCenter() {
+  // Returns a representative point for drag distance checking -- centre of the strip
+  const safeBottom = 34;
+  return { x: W / 2, y: H - safeBottom };
+}
+
+function isInVoidZone(x, y) {
+  const safeBottom = 34;
+  return y > H - safeBottom - 28; // within the strip zone
+}
+
+function drawVoidZone() {
+  if (nodes.length === 0) return;
+  if (!voidActive && !voidEngulfing) return;
+
+  voidPulse += 0.05;
+  const safeBottom = 34;
+  const lineY = H - safeBottom;
+  const alpha  = voidActive ? 1 : 0;
+
+  if (alpha <= 0) return;
+
+  // Pulsing glow strip along the bottom
+  const glowH  = voidEngulfing ? 48 + Math.sin(voidPulse) * 8 : 28;
+  const grad = gfx.createLinearGradient(0, lineY - glowH, 0, lineY + 8);
+  grad.addColorStop(0,   `rgba(255,40,40,0)`);
+  grad.addColorStop(0.6, `rgba(255,40,40,${alpha * (voidEngulfing ? 0.22 : 0.10)})`);
+  grad.addColorStop(1,   `rgba(255,60,60,${alpha * (voidEngulfing ? 0.35 : 0.15)})`);
+  gfx.fillStyle = grad;
+  gfx.fillRect(0, lineY - glowH, W, glowH + 8);
+
+  // The line itself
+  const lineAlpha = voidEngulfing ? 0.95 : 0.55;
+  const lineW     = voidEngulfing ? 2.5  : 1.5;
+  gfx.beginPath();
+  gfx.moveTo(0, lineY);
+  gfx.lineTo(W, lineY);
+  gfx.strokeStyle = `rgba(255,${voidEngulfing ? 80 : 55},${voidEngulfing ? 80 : 55},${lineAlpha})`;
+  gfx.lineWidth   = lineW;
+  gfx.stroke();
+
+  // Tick marks + DESTROY label in the centre
+  const label  = voidEngulfing ? 'RELEASE TO DESTROY' : 'DRAG HERE TO DESTROY';
+  const labelX = W / 2;
+
+  // Small ticks along the line
+  const tickCount = 12;
+  for (let i = 0; i <= tickCount; i++) {
+    const tx    = (i / tickCount) * W;
+    const tickH = i === tickCount / 2 ? 10 : 5;
+    gfx.beginPath();
+    gfx.moveTo(tx, lineY);
+    gfx.lineTo(tx, lineY - tickH);
+    gfx.strokeStyle = `rgba(255,60,60,${lineAlpha * 0.5})`;
+    gfx.lineWidth   = 1;
+    gfx.stroke();
+  }
+
+  // Label
+  gfx.font      = `${voidEngulfing ? 9 : 8}px "Share Tech Mono", monospace`;
+  gfx.fillStyle = `rgba(255,80,80,${lineAlpha * 0.8})`;
+  gfx.textAlign = 'center';
+  gfx.fillText(label, labelX, lineY - 14);
+}
+
+function destroyNode(node) {
+  const isBass  = node.voiceType === 'doublesawbass';
+  const isDrone = node.voiceType === 'drone';
+  const fadeTime = isBass ? 4.0 : isDrone ? 3.0 : 0;
+
+  if (isBass && node.synthBus) {
+    // Bass: fade synthBus
+    try { node.synthBus.gain.setTargetAtTime(0, ctx.currentTime, fadeTime * 0.35); } catch(e) {}
+    setTimeout(() => {
+      try { if (node.synthBus)   node.synthBus.disconnect(); } catch(e) {}
+      try { if (node.fxIn)      node.fxIn.disconnect(); } catch(e) {}
+      try { if (node.fxOut)     node.fxOut.disconnect(); } catch(e) {}
+      try { if (node.filterNode) node.filterNode.disconnect(); } catch(e) {}
+      try { if (node.gainNode)   node.gainNode.disconnect(); } catch(e) {}
+      try { if (node._bassOscs) node._bassOscs.forEach(o => o.stop()); } catch(e) {}
+    }, fadeTime * 1000 + 100);
+
+  } else if (isDrone) {
+    // Clear pitch glide timer
+    if (node._glideTimer) clearTimeout(node._glideTimer);
+    // Drone: fade fxIn (kills oscillator feed into tape delay)
+    // Also kill feedback loop gain so the self-oscillating delay dies too
+    try { node.fxIn.gain.setTargetAtTime(0, ctx.currentTime, fadeTime * 0.35); } catch(e) {}
+    try { node.fxOut.gain.setTargetAtTime(0, ctx.currentTime, fadeTime * 0.35); } catch(e) {}
+    if (node.fxNodes) {
+      try { node.fxNodes.fb.gain.setTargetAtTime(0, ctx.currentTime, fadeTime * 0.35); } catch(e) {}
+      try { node.fxNodes.wet.gain.setTargetAtTime(0, ctx.currentTime, fadeTime * 0.35); } catch(e) {}
+      try { node.fxNodes.dry.gain.setTargetAtTime(0, ctx.currentTime, fadeTime * 0.35); } catch(e) {}
+    }
+    setTimeout(() => {
+      try { if (node.fxIn)  node.fxIn.disconnect();  } catch(e) {}
+      try { if (node.fxOut) node.fxOut.disconnect();  } catch(e) {}
+      try { if (node.fxNodes && node.fxNodes.wowLFO)  node.fxNodes.wowLFO.stop();  } catch(e) {}
+      try { if (node.fxNodes && node.fxNodes.flutLFO) node.fxNodes.flutLFO.stop(); } catch(e) {}
+      try { if (node._bassOscs) node._bassOscs.forEach(o => o.stop()); } catch(e) {}
+    }, fadeTime * 1000 + 100);
+
+  } else {
+    // Instant disconnect for drums, conductor etc
+    try { if (node.synthBus)   node.synthBus.disconnect(); } catch(e) {}
+    try { if (node.fxIn)      node.fxIn.disconnect(); } catch(e) {}
+    try { if (node.fxOut)     node.fxOut.disconnect(); } catch(e) {}
+    try { if (node.filterNode) node.filterNode.disconnect(); } catch(e) {}
+    try { if (node.gainNode)   node.gainNode.disconnect(); } catch(e) {}
+    try { if (node.fxNodes && node.fxNodes.lfo)     node.fxNodes.lfo.stop();     } catch(e) {}
+    try { if (node.fxNodes && node.fxNodes.wowLFO)  node.fxNodes.wowLFO.stop();  } catch(e) {}
+    try { if (node.fxNodes && node.fxNodes.flutLFO) node.fxNodes.flutLFO.stop(); } catch(e) {}
+    try { if (node._bassOscs) node._bassOscs.forEach(o => o.stop()); } catch(e) {}
+  }
+  // Burst of particles at death position
+  const color = node.color;
+  for (let i = 0; i < 20; i++) {
+    const a   = Math.random() * Math.PI * 2;
+    const spd = 1.5 + Math.random() * 4;
+    node.particles.push({
+      x: node.x, y: node.y,
+      vx: Math.cos(a) * spd, vy: Math.sin(a) * spd,
+      life: 1, decay: 0.025 + Math.random() * 0.025,
+      r: 2 + Math.random() * 3
+    });
+  }
+  // Keep particles alive briefly then remove node
+  node.alive = false;
+
+  nodes = nodes.filter(n => n !== node);
+
+  // When bass is destroyed, spawn a guitar-feedback drone in a random open spot
+  const wasBass = node.voiceType === 'doublesawbass';
+  if (wasBass && nodes.length > 0 && masterOriginTime) {
+    const droneHz   = rootHz * (Math.random() > 0.5 ? 3 : 2); // 5th or octave harmonic
+
+    // Find a random position well away from existing nodes
+    let dx, dy;
+    let attempts = 0;
+    do {
+      dx = 60 + Math.random() * (W - 120);
+      dy = 120 + Math.random() * (H - 280);
+      const tooClose = nodes.some(n => Math.hypot(n.x - dx, n.y - dy) < 80);
+      if (!tooClose || attempts > 20) break;
+      attempts++;
+    } while (true);
+
+    const loopBeats  = masterLoopBeats || 8;
+    const loopSec    = loopBeats * masterBeatSec;
+    const droneColor = [Math.random() * 360, 70 + Math.random() * 30, 60 + Math.random() * 20];
+    const droneNode  = new SynthNode(dx, dy, droneColor, loopBeats, loopSec, 'drone', droneHz, 0, 1.5);
+    // Fire immediately -- drone starts now, not at next loop boundary
+    droneNode.nextFireTime = ctx.currentTime + 0.05;
+    nodes.push(droneNode);
+    nodeCount.textContent = nodes.length;
+  }
+
+  // If all nodes gone, reset the session state
+  if (nodes.length === 0) {
+    bpm = null;
+    arpSlotCounter = 0;
+    arpBassOffset  = 0;
+    masterLoopBeats = null;
+    masterBeatSec   = null;
+    masterSixteenthSec    = null;
+    masterThirtySecondSec = null;
+    masterOriginTime      = null;
+    if (beatTimerRef) clearInterval(beatTimerRef);
+    bpmVal.textContent  = '--';
+    nodeCount.textContent = '0';
+    hint.style.opacity  = '1';
+  } else {
+    nodeCount.textContent = nodes.length;
+  }
+}
+</script>
+</body>
+</html>
