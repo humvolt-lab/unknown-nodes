@@ -330,93 +330,106 @@ const DRUM_POOL  = ['drumbreak'];
 const POSITIONAL_EFFECT_TYPES = ['overdrive', 'tape', 'delay', 'distortion', 'bitcrusher'];
 
 // -- DRONE SYNTH --------------------------------------------------------------
-// A stretched version of the bass arp -- same detuned double-saw + sub character,
-// but held continuously with notes changing glacially and a slow filter sweep
-// instead of per-note envelopes. Sounds like the arp held down and dilated.
+// Intentional extension of the bass arp -- steps through arp notes on the beat
+// with a punchy filter envelope per note, just much longer held notes than the arp.
 function buildDroneVoice(hz, node) {
   const dest = (node && node.fxIn) ? node.fxIn : (node && node.synthBus) ? node.synthBus : synthBus;
   const now  = ctx.currentTime;
+  const beat = masterBeatSec || 0.5;
 
-  // Match the bass arp oscillator character exactly
-  const detune    = 4 + Math.random() * 10;
-  const filterLo  = 80  + Math.random() * 80;
-  const filterMid = 600 + Math.random() * 1200;
-  const filterQ   = 3   + Math.random() * 5;
+  // Same oscillator character as bass -- detuned saws + sub
+  const detune  = 8 + Math.random() * 12;
+  const filterLo  = 60  + Math.random() * 60;
+  const filterPeak= 800 + Math.random() * 1400;
+  const filterQ   = 5   + Math.random() * 8;
 
-  // Same oscillator stack as buildDoubleSawBass
   const s1  = ctx.createOscillator(); s1.type = 'sawtooth'; s1.frequency.value = hz;
   const s2  = ctx.createOscillator(); s2.type = 'sawtooth'; s2.frequency.value = hz;
   const sub = ctx.createOscillator(); sub.type = 'sine';     sub.frequency.value = hz / 2;
   s1.detune.value =  detune;
   s2.detune.value = -detune;
 
-  const sawMix  = ctx.createGain(); sawMix.gain.value  = 0.55;
-  const subGain = ctx.createGain(); subGain.gain.value = 0.45;
+  // Square wave for grit -- same as bass
+  const sq = ctx.createOscillator(); sq.type = 'square'; sq.frequency.value = hz;
+  sq.detune.value = detune * 0.3;
+  const sqGain = ctx.createGain(); sqGain.gain.value = 0.12;
 
-  // Same resonant lowpass as the bass, sweeping slowly via LFO
+  const sawMix  = ctx.createGain(); sawMix.gain.value  = 0.50;
+  const subGain = ctx.createGain(); subGain.gain.value = 0.55;
+
+  // Pre-filter drive -- same warmth as bass
+  const drive = ctx.createWaveShaper();
+  const dc = new Float32Array(256);
+  for (let i = 0; i < 256; i++) {
+    const x = (i / 128) - 1;
+    dc[i] = Math.tanh(x * 2.5) * 0.75;
+  }
+  drive.curve = dc; drive.oversample = '2x';
+
+  // Resonant filter
   const filt = ctx.createBiquadFilter(); filt.type = 'lowpass';
   filt.frequency.value = filterLo;
   filt.Q.value = filterQ;
 
-  // Slow filter sweep LFO -- tempo-synced, very long cycle
-  const beat   = masterBeatSec || 0.5;
-  const lfo16b = 1 / (beat * 16);
-  const lfo32b = 1 / (beat * 32);
-
-  const sweepLFO   = ctx.createOscillator(); sweepLFO.type = 'sine';
-  sweepLFO.frequency.value = lfo32b;
-  sweepLFO.frequency.setTargetAtTime(lfo16b, now + 20, 10.0);
-  const sweepDepth = ctx.createGain(); sweepDepth.gain.value = 0;
-  sweepDepth.gain.setTargetAtTime(filterMid * 0.3, now + 2,  3.0);
-  sweepDepth.gain.setTargetAtTime(filterMid * 0.7, now + 15, 8.0);
-  sweepDepth.gain.setTargetAtTime(filterMid,       now + 35, 12.0);
-  try { sweepLFO.connect(sweepDepth); sweepDepth.connect(filt.frequency); } catch(e) {}
-
-  // Filter center slowly rises -- like the arp peak but stretched
-  filt.frequency.setTargetAtTime(filterLo * 2,    now + 8,  8.0);
-  filt.frequency.setTargetAtTime(filterMid * 0.4, now + 25, 12.0);
-  filt.frequency.setTargetAtTime(filterMid * 0.7, now + 50, 15.0);
-
-  // Same wide stereo delay as the bass (7ms)
-  const wideDelay = ctx.createDelay(0.02); wideDelay.delayTime.value = 0.007;
-  const wideGain  = ctx.createGain(); wideGain.gain.value = 0.3;
-
-  // Slow amplitude swell, subtle breathing LFO
+  // Amp -- swell in cleanly matching bass fade duration
   const ampEnv = ctx.createGain(); ampEnv.gain.value = 0;
-  ampEnv.gain.setTargetAtTime(0.45, now, 0.8);
+  ampEnv.gain.setTargetAtTime(0.5, now, 1.2); // 1.2s time constant -- present by ~3s
 
-  const ampLFO     = ctx.createOscillator(); ampLFO.type = 'sine';
-  ampLFO.frequency.value = lfo32b;
-  const ampLFOGain = ctx.createGain(); ampLFOGain.gain.value = 0;
-  ampLFOGain.gain.setTargetAtTime(0.06, now + 10, 8.0);
-  ampLFO.connect(ampLFOGain);
-  try { ampLFOGain.connect(ampEnv.gain); } catch(e) {}
+  // Wide stereo delay
+  const wideDelay = ctx.createDelay(0.02); wideDelay.delayTime.value = 0.007;
+  const wideGain  = ctx.createGain(); wideGain.gain.value = 0.25;
 
-  // Signal path mirrors bass arp exactly
+  // Signal path
   s1.connect(sawMix); s2.connect(sawMix);
-  sawMix.connect(filt);
+  sq.connect(sqGain); sqGain.connect(sawMix);
+  sawMix.connect(drive);
   sub.connect(subGain); subGain.connect(filt);
+  drive.connect(filt);
   filt.connect(ampEnv);
   ampEnv.connect(dest);
   ampEnv.connect(wideDelay); wideDelay.connect(wideGain); wideGain.connect(dest);
 
-  s1.start(now); s2.start(now); sub.start(now);
-  sweepLFO.start(now); ampLFO.start(now);
+  s1.start(now); s2.start(now); sq.start(now); sub.start(now);
+  if (node) node._bassOscs = [s1, s2, sq, sub];
 
-  if (node) node._bassOscs = [s1, s2, sub, sweepLFO, ampLFO];
+  // Step through arp notes on a slow beat -- every 2 or 4 bars
+  // Each note gets a punchy filter sweep like the bass, just longer held
+  let noteIdx = 0;
+  const noteDurBeats = 4; // hold each note for 4 beats
+  const sweepTime    = 0.04 + Math.random() * 0.08;
+  const decayTime    = 0.6  + Math.random() * 0.8;
 
-  // Slowly glide to new notes from the same arp pool every 16-32 beats
-  function scheduleNextGlide() {
+  function playNextNote() {
     if (!node || !node.alive) return;
-    const notes = buildPositionalArp(0.3 + Math.random() * 0.4, 0.4 + Math.random() * 0.3);
-    const targetHz  = notes[Math.floor(Math.random() * notes.length)];
-    const glideTime = beat * (16 + Math.random() * 16);
-    s1.frequency.setTargetAtTime(targetHz,      ctx.currentTime, glideTime * 0.3);
-    s2.frequency.setTargetAtTime(targetHz,      ctx.currentTime, glideTime * 0.3);
-    sub.frequency.setTargetAtTime(targetHz / 2, ctx.currentTime, glideTime * 0.3);
-    node._glideTimer = setTimeout(scheduleNextGlide, glideTime * 1000);
+    const nx = W > 0 ? Math.max(0, Math.min(1, node.x / W)) : 0.5;
+    const ny = H > 0 ? Math.max(0, Math.min(1, node.y / H)) : 0.5;
+    const notes    = buildPositionalArp(nx, ny);
+    const targetHz = notes[noteIdx % notes.length];
+    noteIdx++;
+
+    const t = ctx.currentTime;
+
+    // Glide to new note
+    s1.frequency.setTargetAtTime(targetHz,      t, 0.08);
+    s2.frequency.setTargetAtTime(targetHz,      t, 0.08);
+    sq.frequency.setTargetAtTime(targetHz,      t, 0.08);
+    sub.frequency.setTargetAtTime(targetHz / 2, t, 0.08);
+
+    // Filter sweep per note -- same shape as bass but longer decay
+    filt.frequency.cancelScheduledValues(t);
+    filt.frequency.setValueAtTime(filterLo, t);
+    filt.frequency.linearRampToValueAtTime(filterPeak, t + sweepTime);
+    filt.frequency.exponentialRampToValueAtTime(filterLo * 1.5, t + sweepTime + decayTime);
+
+    // Schedule next note after noteDurBeats
+    const interval = beat * noteDurBeats;
+    node._glideTimer = setTimeout(playNextNote, interval * 1000);
   }
-  if (node) node._glideTimer = setTimeout(scheduleNextGlide, beat * 8 * 1000);
+
+  // First note fires immediately, then steps every noteDurBeats
+  if (node) {
+    node._glideTimer = setTimeout(playNextNote, 100); // near-immediate first step
+  }
 
   return function play(time, noteDur, newHz) {};
 }
@@ -3655,24 +3668,23 @@ function destroyNode(node) {
   // When bass is destroyed, spawn a guitar-feedback drone in a random open spot
   const wasBass = node.voiceType === 'doublesawbass';
   if (wasBass && nodes.length > 0 && masterOriginTime) {
-    const droneHz   = rootHz * (Math.random() > 0.5 ? 3 : 2); // 5th or octave harmonic
+    // Inherit the bass's last played note so the drone feels like a continuation
+    const lastHz = (node.arpNotes && node.arpNotes.length > 0)
+      ? node.arpNotes[0]  // root note of current phrase
+      : rootHz;
 
-    // Find a random position well away from existing nodes
-    let dx, dy;
-    let attempts = 0;
-    do {
-      dx = 60 + Math.random() * (W - 120);
-      dy = 120 + Math.random() * (H - 280);
-      const tooClose = nodes.some(n => Math.hypot(n.x - dx, n.y - dy) < 80);
-      if (!tooClose || attempts > 20) break;
-      attempts++;
-    } while (true);
+    // Spawn at the bass's exact position -- visual continuity
+    const loopBeats = masterLoopBeats || 8;
+    const loopSec   = loopBeats * masterBeatSec;
 
-    const loopBeats  = masterLoopBeats || 8;
-    const loopSec    = loopBeats * masterBeatSec;
-    const droneColor = [Math.random() * 360, 70 + Math.random() * 30, 60 + Math.random() * 20];
-    const droneNode  = new SynthNode(dx, dy, droneColor, loopBeats, loopSec, 'drone', droneHz, 0, 1.5);
-    // Fire immediately -- drone starts now, not at next loop boundary
+    // Inherit the bass's color exactly
+    const droneColor = [...node.color];
+
+    const droneNode = new SynthNode(
+      node.x, node.y,
+      droneColor, loopBeats, loopSec, 'drone', lastHz, 0, 1.5
+    );
+    // Fire immediately so drone voice starts building as bass fades
     droneNode.nextFireTime = ctx.currentTime + 0.05;
     nodes.push(droneNode);
     nodeCount.textContent = nodes.length;
